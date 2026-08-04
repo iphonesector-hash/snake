@@ -5,36 +5,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LoveHub Games</title>
   <style>
-    body { margin:0; font-family: system-ui; background: #0f172a; color: white; }
-    .hub { padding: 40px; text-align: center; }
+    body { margin:0; font-family: system-ui, -apple-system, sans-serif; background: #0b1120; color: white; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .hub { padding: 40px 20px; text-align: center; width: 100%; }
+    .hub h1 { font-size: 42px; margin: 0 0 6px; background: linear-gradient(90deg,#34d399,#38bdf8,#fde047); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hub p { color: #94a3b8; margin: 0 0 30px; }
     .game-card {
       display: inline-block;
-      background: rgba(255,255,255,0.1);
-      padding: 30px;
-      border-radius: 24px;
-      margin: 20px;
+      background: rgba(255,255,255,0.06);
+      padding: 34px 40px;
+      border-radius: 28px;
+      margin: 12px;
       cursor: pointer;
-      transition: all 0.4s;
+      transition: all 0.4s cubic-bezier(0.22,1,0.36,1);
       backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      color: inherit;
+      text-decoration: none;
     }
-    .game-card:hover { transform: scale(1.08); box-shadow: 0 20px 40px rgba(236, 72, 153, 0.3); }
+    .game-card:hover { transform: scale(1.06) translateY(-6px); box-shadow: 0 30px 70px rgba(52,211,153,0.25); border-color: rgba(52,211,153,0.4); }
+    .game-card img { border-radius: 22px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .game-card h2 { margin: 18px 0 6px; font-size: 24px; }
+    .game-card p { color: #94a3b8; margin: 0 0 16px; font-size: 14px; }
+    .play-btn {
+      display: inline-block; margin-top: 4px; padding: 12px 34px; border-radius: 999px;
+      background: linear-gradient(135deg,#34d399,#059669); color: #04110c; font-weight: 800; font-size: 16px;
+      border: none; cursor: pointer; transition: transform 0.2s; font-family: inherit;
+    }
+    .play-btn:hover { transform: scale(1.06); }
+    .badges { margin-top: 26px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .badge { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 6px 14px; border-radius: 999px; font-size: 12px; color: #94a3b8; }
   </style>
 </head>
 <body>
   <div class="hub">
     <h1>🎮 LoveHub Games</h1>
     <p>انتخاب بازی — تجربه Apple Arcade</p>
-    
-    <div class="game-card" onclick="launchSnake()">
-      <img src="games/snake/assets/logos/lovehub.png" width="180" alt="LoveHub Snake">
+
+    <!-- Relative href keeps this working on GitHub Pages subdirectory hosting (e.g. /snake/) -->
+    <a class="game-card" href="games/snake/index.html">
+      <img src="games/snake/assets/logos/lovehub.svg" width="180" alt="LoveHub Snake">
       <h2 style="margin: 15px 0 8px;">LoveHub Snake</h2>
-      <p>مار پرمیوم — با پیشرفت و مولتی‌پلیر</p>
+      <p>مار پرمیوم — ۱۰۰ مرحله، دنیاها، باس‌ها و پیشرفت</p>
+      <span class="play-btn" role="button">🎮 شروع بازی</span>
+    </a>
+
+    <div class="badges">
+      <span class="badge">🌍 ۱۰ دنیا</span>
+      <span class="badge">💥 باس‌فایت</span>
+      <span class="badge">⚡ پاورآپ</span>
+      <span class="badge">♾ بی‌پایان</span>
+      <span class="badge">🏆 دستاوردها</span>
     </div>
   </div>
 
   <script type="module">
+    // Compatibility helper (the card above is a plain relative link now).
     window.launchSnake = () => {
-      alert('برای اجرای کامل بازی، پروژه را با HTTP Server (python3 -m http.server) اجرا کنید.');
+      location.href = 'games/snake/index.html';
     };
   </script>
 </body>

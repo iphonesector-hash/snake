@@ -1,0 +1,16 @@
+{
+  "name": "lovehub-games",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LoveHub Games — static RTL game hub (premium Snake launcher)",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "preview": "node server.js",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
