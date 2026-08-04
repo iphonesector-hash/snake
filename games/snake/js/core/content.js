@@ -310,6 +310,8 @@ export const SKINS = [
   { id: "cyber", fa: "سایبر", colors: ["#67e8f9", "#e879f9"], price: 550, icon: "🤖", eyes: "glow", head: "visor", pattern: "hex", glow: 18, trail: "neon" },
   { id: "space", fa: "فضایی", colors: ["#c084fc", "#1e1b4b"], price: 650, icon: "🚀", eyes: "star", head: "drone", pattern: "diamond", glow: 18, trail: "shadow" },
   { id: "royal", fa: "شاهانه", colors: ["#f0abfc", "#7c3aed"], price: 1200, currency: "gems", icon: "💜", eyes: "star", head: "royal", pattern: "diamond", glow: 24, trail: "gold", legendary: true },
+  { id: "galaxy", fa: "کهکشانی", colors: ["#818cf8", "#0f172a"], price: 0, icon: "🌌", eyes: "star", head: "crystal", pattern: "diamond", glow: 26, trail: "neon", unlock: "achievement:world5", legendary: true, desc: "از دل ستارهها" },
+  { id: "dark", fa: "افسانهای تاریک", colors: ["#334155", "#0b1120"], price: 1500, currency: "gems", icon: "🖤", eyes: "fire", head: "horns", pattern: "hex", glow: 28, trail: "shadow", legendary: true, desc: "مار افسانهای از اعماق تاریکی" },
   { id: "cosmic", fa: "کیهانی", colors: ["#22d3ee", "#1e1b4b"], price: 900, currency: "gems", icon: "🌌", eyes: "star", head: "drone", pattern: "hex", glow: 22, trail: "shadow", unlock: "prestige:1", legendary: true },
   { id: "prism", fa: "منشور", colors: ["#fef08a", "#f0abfc"], price: 0, icon: "💎", eyes: "star", head: "crystal", pattern: "rainbow", glow: 22, trail: "gold", unlock: "achievement:completionist", legendary: true },
 ];

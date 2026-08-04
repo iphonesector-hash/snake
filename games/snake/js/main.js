@@ -4,8 +4,10 @@ import { Renderer } from "./engine/render.js";
 import { UI } from "./ui/menus.js";
 import { loadProfile, profile } from "./core/state.js";
 import { AudioSys } from "./core/audio.js";
+import { applyLang } from "./core/i18n.js";
 
 const p = loadProfile();
+applyLang(); // set <html dir/lang> from saved preference before first paint
 const canvas = document.getElementById("game-canvas");
 
 const game = new Game({ onEvent: () => {} });
@@ -75,7 +77,8 @@ function steerToward(clientX, clientY) {
   if (ax === lastSteer.x && ay === lastSteer.y) return;
   if (performance.now() < steerLockUntil) return;
   lastSteer = { x: ax, y: ay };
-  steerLockUntil = performance.now() + 110; // brief anti-jitter window
+  // tiny 45ms window: kills jitter while keeping turns near-instant (anti-reverse is handled in queueDir)
+  steerLockUntil = performance.now() + 45;
   game.inputDir(ax, ay);
 }
 
@@ -140,14 +143,14 @@ const initAudio = () => {
 window.addEventListener("pointerdown", initAudio);
 window.addEventListener("keydown", initAudio);
 
-// premium loader fade-out, then show the menu
+// premium loader fade-out, then show the menu (or first-run language picker)
 const loaderEl = document.getElementById("loader");
 const boot = () => {
   if (loaderEl) {
     loaderEl.classList.add("done");
     setTimeout(() => loaderEl.remove(), 700);
   }
-  ui.show("main");
+  ui.show(p.settings && p.settings.lang ? "main" : "language");
 };
 // ensure the loader shows at least briefly for a cinematic feel
 const t0 = performance.now();

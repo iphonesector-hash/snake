@@ -9,6 +9,10 @@ import {
   equipSkin, wheelSpin, wheelRemaining, formatCountdown, consumeBooster,
   chestOpen, claimQuest, prestige, saveProfile,
 } from "../core/state.js";
+import {
+  t, setLang, getLang, applyLang, skinName, puName, achName, achDesc,
+  worldName, worldDesc, bossSub, eventName, questName, ruleName,
+} from "../core/i18n.js";
 
 const OB_FA = {
   spikes: "سنبله", lava: "گدازه", ice: "یخ", wind: "باد", mines: "مین",
@@ -17,6 +21,12 @@ const OB_FA = {
 };
 function fmt(n) { return (n || 0).toLocaleString("en-US"); }
 import { AudioSys } from "../core/audio.js";
+const _OB_EN = {
+  spikes: "Spikes", lava: "Lava", ice: "Ice", wind: "Wind", mines: "Mines",
+  mwall: "Moving Wall", laser: "Laser", teleport: "Teleport", poison: "Poison",
+  darkness: "Darkness", magnet: "Magnet", rainbow: "Rainbow", rocks: "Rocks", everything: "Everything",
+};
+function obName(o) { return getLang() === "en" ? (_OB_EN[o] || o) : (OB_FA[o] || o); }
 
 export class UI {
   constructor({ game, renderer, root, hudRoot, toastRoot, cinRoot, dpadRoot }) {
@@ -75,8 +85,8 @@ export class UI {
   shell(inner, opts = {}) {
     const p = this.p();
     const ev = eventInfo();
-    const evBanner = ev ? `<div class="event-banner" data-act="daily">${ev.icon} ${ev.fa}</div>` : "";
-    const backBtn = opts.back ? `<button class="mini-btn" data-act="menu">← منو</button>` : "";
+    const evBanner = ev ? `<div class="event-banner" data-act="daily">${ev.icon} ${t("activeEvent", { n: ev.fa })}</div>` : "";
+    const backBtn = opts.back ? `<button class="mini-btn" data-act="menu">${t("backMenu")}</button>` : "";
     return `
       <div class="screen-wrap">
         <div class="shell-top">
@@ -97,17 +107,32 @@ export class UI {
   screenHtml(name) {
     switch (name) {
       case "main": return this.shell(this.mainBody());
-      case "worlds": return this.shell(this.worldsBody(), { title: "🌍 دنیاها", back: true });
-      case "levels": return this.shell(this.levelsBody(), { title: `🗺 ${WORLDS[this.currentWorld].fa}`, back: true });
-      case "shop": return this.shell(this.shopBody(), { title: "🛍 فروشگاه", back: true });
-      case "collection": return this.shell(this.collectionBody(), { title: "🎨 مجموعه", back: true });
-      case "achievements": return this.shell(this.achievementsBody(), { title: "🏅 دستاوردها", back: true });
-      case "leaderboard": return this.shell(this.leaderboardBody(), { title: "🏆 جدول امتیازها", back: true });
-      case "settings": return this.shell(this.settingsBody(), { title: "⚙️ تنظیمات", back: true });
-      case "daily": return this.shell(this.dailyBody(), { title: "🌞 چالش روزانه", back: true });
-      case "replay": return this.shell(this.replayBody(), { title: "🎬 بازپخش", back: true });
+      case "language": return this.langBody();
+      case "worlds": return this.shell(this.worldsBody(), { title: "🌍 " + t("worlds"), back: true });
+      case "levels": return this.shell(this.levelsBody(), { title: `🗺 ${worldName(WORLDS[this.currentWorld])}`, back: true });
+      case "shop": return this.shell(this.shopBody(), { title: "🛍 " + t("shop"), back: true });
+      case "collection": return this.shell(this.collectionBody(), { title: "🎨 " + t("collection"), back: true });
+      case "achievements": return this.shell(this.achievementsBody(), { title: "🏅 " + t("achievements"), back: true });
+      case "leaderboard": return this.shell(this.leaderboardBody(), { title: "🏆 " + t("leaderboard"), back: true });
+      case "settings": return this.shell(this.settingsBody(), { title: "⚙️ " + t("settings"), back: true });
+      case "daily": return this.shell(this.dailyBody(), { title: "🌞 " + t("daily"), back: true });
+      case "replay": return this.shell(this.replayBody(), { title: "🎬 " + t("replay"), back: true });
       default: return this.shell(this.mainBody());
     }
+  }
+
+  // ---------- first-launch language picker ----------
+  langBody() {
+    return `
+      <div class="screen-wrap">
+        <div class="lang-pick">
+          <div class="logo-badge">🐍</div>
+          <h1 class="lang-title">${t("langPickTitle")}</h1>
+          <p class="lang-desc">${t("langPickDesc")}</p>
+          <button class="menu-btn lang-btn" data-act="lang:fa">فارسی 🇮🇷</button>
+          <button class="menu-btn lang-btn accent" data-act="lang:en">English 🇬🇧</button>
+        </div>
+      </div>`;
   }
 
   mainBody() {
@@ -120,23 +145,23 @@ export class UI {
         <div class="logo-title">
           <div class="logo-badge">🐍</div>
           <h1>LoveHub <span>Snake</span></h1>
-          <p class="tagline">نسخهی نهایی پرمیوم</p>
+          <p class="tagline">${t("tagline")}</p>
         </div>
-        <div class="xp-bar-wrap"><div class="xp-bar" style="width:${Math.min(100, (p.xp / xpNeed) * 100)}%"></div><span class="xp-label">سطح ${p.level} — ${p.xp}/${xpNeed} XP</span></div>
-        ${ev ? `<div class="main-event">${ev.icon} رویداد فعال: ${ev.fa}</div>` : ""}
+        <div class="xp-bar-wrap"><div class="xp-bar" style="width:${Math.min(100, (p.xp / xpNeed) * 100)}%"></div><span class="xp-label">${t("xp", { n: p.level, a: p.xp, b: xpNeed })}</span></div>
+        ${ev ? `<div class="main-event">${ev.icon} ${t("activeEvent", { n: ev.fa })}</div>` : ""}
         <div class="menu-grid">
-          <button class="menu-btn primary" data-act="campaign">🎯 کمپین</button>
-          <button class="menu-btn" data-act="endless">♾ حالت بیپایان</button>
-          <button class="menu-btn accent" data-act="daily">🌞 چالش روزانه</button>
-          <button class="menu-btn" data-act="worlds">🗺 نقشه دنیاها</button>
-          <button class="menu-btn" data-act="shop">🛍 فروشگاه</button>
-          <button class="menu-btn" data-act="collection">🎨 مجموعه</button>
-          <button class="menu-btn" data-act="achievements">🏅 دستاوردها</button>
-          <button class="menu-btn" data-act="leaderboard">🏆 امتیازها</button>
-          <button class="menu-btn" data-act="replay">🎬 بازپخشها</button>
-          <button class="menu-btn" data-act="settings">⚙️ تنظیمات</button>
+          <button class="menu-btn primary" data-act="campaign">🎯 ${t("campaign")}</button>
+          <button class="menu-btn" data-act="endless">♾ ${t("endless")}</button>
+          <button class="menu-btn accent" data-act="daily">🌞 ${t("daily")}</button>
+          <button class="menu-btn" data-act="worlds">🗺 ${t("worlds")}</button>
+          <button class="menu-btn" data-act="shop">🛍 ${t("shop")}</button>
+          <button class="menu-btn" data-act="collection">🎨 ${t("collection")}</button>
+          <button class="menu-btn" data-act="achievements">🏅 ${t("achievements")}</button>
+          <button class="menu-btn" data-act="leaderboard">🏆 ${t("leaderboard")}</button>
+          <button class="menu-btn" data-act="replay">🎬 ${t("replay")}</button>
+          <button class="menu-btn" data-act="settings">⚙️ ${t("settings")}</button>
         </div>
-        <div class="streak-line">${streak > 0 ? `🔥 ${streak} روز متوالی` : "امروز وارد شو تا پاداش بگیری!"} — ${p.stats.levelsWon} برد</div>
+        <div class="streak-line">${streak > 0 ? t("streak", { n: streak }) : t("loginCta")} — ${t("wins", { n: p.stats.levelsWon })}</div>
       </div>`;
   }
 
@@ -148,10 +173,10 @@ export class UI {
       return `
         <div class="world-card ${unlocked ? "" : "locked"}" data-act="${unlocked ? `levels:${i}` : ""}" style="--c1:${w.c1};--c2:${w.c2}">
           <div class="world-icon">${w.boss ? "👑" : "🌍"}</div>
-          <div class="world-name">${w.fa}</div>
+          <div class="world-name">${worldName(w)}</div>
           <div class="world-progress">${done}/10 ${unlocked ? "" : "🔒"}</div>
           <div class="world-stars">${"★".repeat(Math.floor(done))}${"☆".repeat(10 - Math.floor(done))}</div>
-          <div class="world-desc">${w.desc}</div>
+          <div class="world-desc">${worldDesc(w)}</div>
         </div>`;
     }).join("")}</div>`;
   }
@@ -185,7 +210,7 @@ export class UI {
           </button>`;
         }).join("")}
       </div>
-      <div class="back-row"><button class="menu-btn small" data-act="worlds">← بازگشت</button></div>`;
+      <div class="back-row"><button class="menu-btn small" data-act="worlds">${t("back")}</button></div>`;
   }
 
   afterRender(name) {
@@ -194,7 +219,7 @@ export class UI {
     });
     if (name === "main") {
       const res = dailyLogin();
-      if (!res.claimed) this.toast(`پاداش ورود روزانه: +${res.reward} سکه 🎁`, "📅");
+      if (!res.claimed) this.toast(t("loginReward", { n: res.reward }), "📅");
     }
     if (name === "shop") this.afterShop();
     if (name === "collection") this.afterCollection();
@@ -217,7 +242,12 @@ export class UI {
     }
     else if (act.startsWith("retry:")) this.retryLast();
     else if (act.startsWith("next:")) this.nextLevel();
-    else if (act === "worlds" || act === "shop" || act === "collection" || act === "achievements" || act === "leaderboard" || act === "settings" || act === "replay") this.show(act);
+    else if (act === "worlds" || act === "shop" || act === "collection" || act === "achievements" || act === "leaderboard" || act === "settings" || act === "replay" || act === "language") this.show(act);
+    else if (act.startsWith("lang:")) {
+      setLang(act.split(":")[1]);
+      this.show("main");
+      this.toast(getLang() === "en" ? "Language: English 🇬🇧" : "زبان: فارسی 🇮🇷", "🌐");
+    }
     else if (act === "pause") this.game.togglePause();
     else if (act === "resume") this.game.togglePause();
     else if (act === "quit") { this.game.audio.stopMusic(); this.game.running = false; this.show("main"); }
@@ -235,7 +265,7 @@ export class UI {
     else if (act === "prestige") this.doPrestige();
     else if (act === "export-save") this.exportSave();
     else if (act === "import-save") this.importSave();
-    else if (act === "reset-save") { if (confirm("همه پیشرفتها حذف شود؟")) { localStorage.removeItem("lovehub.snake.v1"); location.reload(); } }
+    else if (act === "reset-save") { if (confirm(t("resetConfirm"))) { localStorage.removeItem("lovehub.snake.v1"); location.reload(); } }
     else if (act.startsWith("set:")) this.applySetting(act);
     else if (act.startsWith("toggle:")) this.applyToggle(act.split(":")[1]);
     else if (act.startsWith("replay-run:")) this.playReplay(+act.split(":")[2]);
@@ -309,7 +339,7 @@ export class UI {
     const booster = consumeBooster();
     if (booster) {
       this.game.applyPowerup(booster);
-      this.toast(`⏫ بوستر «${POWERUPS[booster].fa}» فعال شد!`, POWERUPS[booster].icon);
+      this.toast(t("boosterActive", { n: puName(POWERUPS[booster]) }), POWERUPS[booster].icon);
     }
   }
 
@@ -317,7 +347,7 @@ export class UI {
     const run = this.p().runs[i];
     if (!run) return;
     this.replayMode = true;
-    this.toast("🎬 بازپخش...", "🎥");
+    this.toast(t("replayToast"), "🎥");
     const level = genLevel(run.worldIdx, run.levelNum, run.seed, "campaign");
     this.game.skinId = this.p().skin;
     this.game.startLevel(level, "replay", { replay: run });
@@ -352,13 +382,13 @@ export class UI {
     this.el("hud-top").innerHTML = `
       <div class="hud-top">
         <button class="hud-pause" data-act="pause">⏸</button>
-        <div class="hud-score">امتیاز: <b id="hud-score">0</b></div>
+        <div class="hud-score">${t("score")} <b id="hud-score">0</b></div>
         <div class="hud-combo hidden" id="hud-combo">×<span id="hud-combo-n">0</span></div>
         <div class="hud-timer hidden" id="hud-timer"></div>
         <div class="hud-lives" id="hud-lives"></div>
         <div class="hud-obj" id="hud-obj"></div>
       </div>`;
-    this.el("boss-area").innerHTML = boss ? `<div class="boss-bar-wrap"><div class="boss-name">☠ ${l.boss.fa}</div><div class="boss-bar"><div class="boss-bar-fill" id="boss-hp"></div></div><div class="boss-hint" id="boss-hint">🔋 انرژی بگیر (۳ تا) و به سر باس ضربه بزن!</div></div>` : "";
+    this.el("boss-area").innerHTML = boss ? `<div class="boss-bar-wrap"><div class="boss-name">☠ ${getLang() === "en" ? l.boss.name : l.boss.fa}</div><div class="boss-bar"><div class="boss-bar-fill" id="boss-hp"></div></div><div class="boss-hint" id="boss-hint">🔋 ${t("bossEat")}</div></div>` : "";
     this.el("pu-chips").innerHTML = "";
     this.el("hud-top").querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => this.action(b.getAttribute("data-act"))));
     this.bindDpad();
@@ -373,7 +403,7 @@ export class UI {
     const icons = { eat: "🍎", length: "📏", survive: "⏱", time: "⏳", nohit: "💠", keys: "🔑", boss: "☠" };
     el.innerHTML = l.objectives.map((o) => {
       const done = this.game.objectiveDone(o);
-      const label = o.type === "eat" ? `${o.target} سیب` : o.type === "length" ? `طول ${o.target}` : o.type === "survive" ? `${o.seconds}s زنده بمان` : o.type === "time" ? "به موقع تمام کن" : o.type === "nohit" ? "بدون آسیب" : o.type === "keys" ? `${this.game.keysCollected}/${o.target} کلید` : "باس را شکست بده";
+      const label = o.type === "eat" ? t("objEat", { n: o.target }) : o.type === "length" ? t("objLength", { n: o.target }) : o.type === "survive" ? t("objSurvive", { n: o.seconds }) : o.type === "time" ? t("objTime") : o.type === "nohit" ? t("objNohit") : o.type === "keys" ? t("objKeys", { a: this.game.keysCollected, n: o.target }) : t("objBoss");
       return `<span class="obj-chip ${done ? "done" : ""}">${icons[o.type] || "🎯"} ${label}</span>`;
     }).join("");
   }
@@ -417,10 +447,10 @@ export class UI {
       const hint = this.el("boss-hint");
       if (hint) {
         hint.textContent = g.boss.strikeReady
-          ? "⚡ ضربه آماده است — به سر باس ضربه بزن!"
+          ? "⚡ " + t("strikeReady")
           : g.boss.cores > 0
-            ? `🔋 ${g.boss.cores}/۳ انرژی — بدن باس خطرناک است`
-            : "🔋 از هستههای انرژی باس (نقاط بنفش) بخور";
+            ? t("bossCores", { n: g.boss.cores })
+            : "🔋 " + t("bossEat");
         hint.style.color = g.boss.strikeReady ? "#fde047" : "";
       }
     }
@@ -454,21 +484,21 @@ export class UI {
         this.game.startLevel(level, "endless");
         this.game.score = sc;
         this.game.secElapsed = elapsed;
-        this.toast(`♾ مرحله ${tier + 2} بیپایان — سرعت بیشتر!`, "♾️");
+        this.toast(t("endlessRegen", { n: tier + 2 }), "♾️");
         break;
       }
       case "complete": this.onWin(); break;
       case "gameOver": this.onLose(data); break;
-      case "powerup": this.toast(`${POWERUPS[data.type].icon} ${POWERUPS[data.type].fa} فعال شد`, POWERUPS[data.type].icon); break;
-      case "event": this.toast(`${data.icon} رویداد: ${data.fa}`, data.icon); break;
-      case "strikeReady": this.toast("⚡ ضربه آماده است! به سر باس بزن", "⚡"); break;
+      case "powerup": this.toast(t("powerupOn", { icon: POWERUPS[data.type].icon, n: puName(POWERUPS[data.type]) }), POWERUPS[data.type].icon); break;
+      case "event": this.toast(t("eventOn", { icon: data.icon, n: eventName(data.id) }), data.icon); break;
+      case "strikeReady": this.toast("⚡ " + t("strikeReady"), "⚡"); break;
       case "coreSpawned": break;
-      case "bossPhase": this.toast(`💢 باس وارد فاز ${data.phase + 1} شد!`, "💢"); this.game.shake(10); break;
-      case "bossDefeated": this.toast("باس شکست خورد! 🎉", "🏆"); this.game.fx.confetti(this.game.boss.head.x, this.game.boss.head.y, null, 60); break;
-      case "secretFound": this.toast("🗝 اتاق مخفی! +۱۵۰ امتیاز", "🗝️"); break;
-      case "shieldBreak": this.toast("سپر شکست!", "🛡"); break;
-      case "respawn": this.toast("با جان تازه ادامه بده!", "❤️"); break;
-      case "portalReached": this.toast("پرتال فعال شد!", "🚪"); break;
+      case "bossPhase": this.toast(t("bossPhase", { n: data.phase + 1 }), "💢"); this.game.shake(10); break;
+      case "bossDefeated": this.toast(t("bossDown"), "🏆"); this.game.fx.confetti(this.game.boss.head.x, this.game.boss.head.y, null, 60); break;
+      case "secretFound": this.toast(t("secretFound"), "🗝️"); break;
+      case "shieldBreak": this.toast(t("shieldBreak"), "🛡"); break;
+      case "respawn": this.toast(t("respawn"), "❤️"); break;
+      case "portalReached": this.toast(t("portalReached"), "🚪"); break;
       case "pause": if (data.paused) this.showPause(); else this.hudRoot.classList.remove("hidden"); break;
     }
   }
@@ -477,12 +507,12 @@ export class UI {
     this.hudRoot.classList.add("hidden");
     this.cinRoot.innerHTML = `
       <div class="cin pause-cin">
-        <div class="cin-title">⏸ توقف</div>
+        <div class="cin-title">${t("pause")}</div>
         <div class="pause-btns">
-          <button class="menu-btn primary" data-act="resume">▶ ادامه</button>
-          <button class="menu-btn" data-act="retry:1">🔄 دوباره</button>
-          <button class="menu-btn" data-act="menu">🏠 منو</button>
-          <button class="menu-btn" data-act="settings-quick">⚙️ تنظیمات</button>
+          <button class="menu-btn primary" data-act="resume">${t("resume")}</button>
+          <button class="menu-btn" data-act="retry:1">${t("retry")}</button>
+          <button class="menu-btn" data-act="menu">${t("menu")}</button>
+          <button class="menu-btn" data-act="settings-quick">${t("settings")}</button>
         </div>
       </div>`;
     this.cinRoot.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => {
@@ -537,11 +567,11 @@ export class UI {
     addQuestProgress("levelsWon");
     addQuestProgress("plays");
     const newly = checkAchievements({ g, mode, p: this.p() });
-    newly.forEach((a) => this.toast(`دستاورد: ${a.fa} (+${a.reward} 🪙)`, a.icon));
+    newly.forEach((a) => this.toast(t("achievement", { n: achName(a), c: a.reward }), a.icon));
     this.cinematic("win", { stars, rewards, score: g.score, mode, levelNum: l.levelNum, worldIdx: l.worldIdx });
     if (mode === "campaign" && l.levelNum === 10) {
       const w = WORLDS[l.worldIdx];
-      setTimeout(() => this.toast(`🎉 دنیای «${w.fa}» کامل شد!`, "👑"), 1200);
+      setTimeout(() => this.toast(t("worldComplete", { n: worldName(w) }), "👑"), 1200);
     }
   }
 
@@ -554,7 +584,7 @@ export class UI {
     }
     addQuestProgress("plays");
     const newly = checkAchievements({ g, p: this.p() });
-    newly.forEach((a) => this.toast(`دستاورد: ${a.fa} (+${a.reward} 🪙)`, a.icon));
+    newly.forEach((a) => this.toast(t("achievement", { n: achName(a), c: a.reward }), a.icon));
     this.cinematic("lose", { score: g.score, best: this.p().best.endless, mode: g.mode });
   }
 
@@ -564,10 +594,10 @@ export class UI {
     if (kind === "world") {
       const w = WORLDS[data];
       cin.innerHTML = `<div class="cin world-cin" style="--c1:${w.c1};--c2:${w.c2}">
-        <div class="cin-kicker">دنیای جدید</div>
-        <div class="cin-title">${w.fa}</div>
-        <div class="cin-desc">${w.desc}</div>
-        <div class="cin-chips">${(w.obstacles[0] === "everything" ? ["mines", "laser", "teleport", "darkness", "wind", "spikes", "lava"] : w.obstacles).map((o) => `<span class="cin-chip">⚠️ ${OB_FA[o] || o}</span>`).join("")}</div>
+        <div class="cin-kicker">${t("newWorld")}</div>
+        <div class="cin-title">${worldName(w)}</div>
+        <div class="cin-desc">${worldDesc(w)}</div>
+        <div class="cin-chips">${(w.obstacles[0] === "everything" ? ["mines", "laser", "teleport", "darkness", "wind", "spikes", "lava"] : w.obstacles).map((o) => `<span class="cin-chip">⚠️ ${obName(o)}</span>`).join("")}</div>
       </div>`;
       setTimeout(() => { cin.innerHTML = ""; }, 2400);
       return;
@@ -576,9 +606,9 @@ export class UI {
       const w = WORLDS[data.worldIdx];
       const b = data.boss;
       cin.innerHTML = `<div class="cin boss-cin" style="--c1:${w.c1};--c2:${b.c}">
-        <div class="cin-kicker">☠ نبرد باس</div>
-        <div class="cin-title">${b.fa}</div>
-        <div class="cin-sub">${b.sub}</div>
+        <div class="cin-kicker">${t("bossBattle")}</div>
+        <div class="cin-title">${getLang() === "en" ? b.name : b.fa}</div>
+        <div class="cin-sub">${bossSub(b)}</div>
         <div class="boss-prebar"><div class="boss-prebar-fill"></div></div>
       </div>`;
       this.game.audio.play("bossRoar");
@@ -589,12 +619,12 @@ export class UI {
       const next = data.mode === "campaign" && data.levelNum < 10;
       cin.innerHTML = `<div class="cin win-cin">
         <div class="win-stars">${[1, 2, 3].map((i) => `<span class="ws ${i <= data.stars ? "lit" : ""}" style="animation-delay:${i * 0.3}s">★</span>`).join("")}</div>
-        <div class="cin-title">پیروزی!</div>
-        <div class="win-score">امتیاز: <b>${fmt(data.score)}</b></div>
+        <div class="cin-title">${t("victory")}</div>
+        <div class="win-score">${t("score")} <b>${fmt(data.score)}</b></div>
         <div class="win-rewards">🪙 +${data.rewards.coins || 0} ${data.rewards.gems ? `💎 +${data.rewards.gems}` : ""} ${data.rewards.xp ? `⭐ +${data.rewards.xp} XP` : ""}</div>
         <div class="pause-btns">
-          <button class="menu-btn primary" data-act="${next ? `next:` : data.mode === "endless" ? "endless" : "menu"}">${next ? "➡ مرحله بعد" : "🏠 منو"}</button>
-          <button class="menu-btn" data-act="retry:1">🔄 دوباره</button>
+          <button class="menu-btn primary" data-act="${next ? `next:` : data.mode === "endless" ? "endless" : "menu"}">${next ? t("nextLevel") : t("menu")}</button>
+          <button class="menu-btn" data-act="retry:1">${t("retry")}</button>
         </div>
       </div>`;
       this.audioWin();
@@ -602,12 +632,12 @@ export class UI {
     if (kind === "lose") {
       cin.innerHTML = `<div class="cin lose-cin">
         <div class="lose-face">💀</div>
-        <div class="cin-title">باخت!</div>
-        <div class="win-score">امتیاز: <b>${fmt(data.score)}</b></div>
-        <div class="win-rewards">بهترین بیپایان: ${fmt(data.best)}</div>
+        <div class="cin-title">${t("defeat")}</div>
+        <div class="win-score">${t("score")} <b>${fmt(data.score)}</b></div>
+        <div class="win-rewards">${t("bestEndless", { n: fmt(data.best) })}</div>
         <div class="pause-btns">
-          <button class="menu-btn primary" data-act="${data.mode === "endless" ? "endless" : "retry:1"}">🔄 تلاش دوباره</button>
-          <button class="menu-btn" data-act="menu">🏠 منو</button>
+          <button class="menu-btn primary" data-act="${data.mode === "endless" ? "endless" : "retry:1"}">${t("tryAgain")}</button>
+          <button class="menu-btn" data-act="menu">${t("menu")}</button>
         </div>
       </div>`;
     }
@@ -631,33 +661,34 @@ export class UI {
     const wLeft = wheelRemaining();
     const wheelBtn = wLeft > 0
       ? `<button class="menu-btn accent" data-act="spin" disabled><span id="wheel-cd">⏳ ${formatCountdown(wLeft)}</span></button>`
-      : `<button class="menu-btn accent" data-act="spin">🎡 بچرخان (۵۰ 🪙)</button>`;
+      : `<button class="menu-btn accent" data-act="spin">${t("spin")}</button>`;
     const frags = p.wheel?.fragments || 0;
     const boosters = p.wheel?.boosters?.length || 0;
     const skinRows = SKINS.map((s) => {
       const owned = p.owned.includes(s.id);
       const equip = p.skin === s.id;
       const locked = !owned && s.unlock && !this.canUnlock(s);
-      const price = s.price ? `${s.currency === "gems" ? "💎" : "🪙"} ${fmt(s.price)}` : "رایگان";
+      const price = s.price ? `${s.currency === "gems" ? "💎" : "🪙"} ${fmt(s.price)}` : t("free");
+      const unlockTxt = s.unlock ? (s.unlock.startsWith("achievement") ? t("unlockAch") : s.unlock.startsWith("event") ? t("unlockEvent") : t("unlockPrestige")) : "";
       return `<div class="shop-skin ${owned ? "owned" : "locked"} ${equip ? "eq" : ""} ${s.legendary ? "legendary" : ""}" style="--sc1:${s.colors[0]};--sc2:${s.colors[1]}">
         <div class="skin-icon">${s.icon}</div>
-        <div class="skin-name">${s.fa} ${s.legendary ? "🌟" : ""} ${s.seasonal ? "🎉" : ""}</div>
-        ${equip ? `<div class="skin-state">✔ مجهز</div>`
-          : owned ? `<button class="mini-btn" data-act="equip:${s.id}">مجهز کن</button>`
-          : locked ? `<div class="skin-state">${s.unlock.startsWith("achievement") ? "🔓 با دستاورد" : s.unlock.startsWith("event") ? "🎉 رویداد فصلی" : "🌟 پرستیژ"}</div>`
+        <div class="skin-name">${skinName(s)} ${s.legendary ? "🌟" : ""} ${s.seasonal ? "🎉" : ""}</div>
+        ${equip ? `<div class="skin-state">${t("equipped")}</div>`
+          : owned ? `<button class="mini-btn" data-act="equip:${s.id}">${t("equip")}</button>`
+          : locked ? `<div class="skin-state">${unlockTxt}</div>`
           : `<button class="mini-btn buy" data-act="buy-skin:${s.id}">${price}</button>`}
       </div>`;
     }).join("");
     return `
-      <div class="shop-section"><h3>🎨 پوستههای مار</h3><div class="skin-grid">${skinRows}</div></div>
+      <div class="shop-section"><h3>${t("skinsTitle")}</h3><div class="skin-grid">${skinRows}</div></div>
       <div class="shop-section">
-        <h3>🎡 چرخ بخت روزانه <span class="cost">(هر ۲۴ ساعت — یک بار)</span></h3>
+        <h3>${t("wheelTitle")} <span class="cost">${t("wheelCost")}</span></h3>
         ${wheelBtn}
-        <div class="hint-line">🧩 تکه پوست: ${frags}/۸ &nbsp;•&nbsp; ⏫ بوستر: ${boosters}</div>
-        <h3>📦 صندوق سکه <span class="cost">(هر ۴ ساعت)</span></h3>
-        <button class="menu-btn" data-act="chest">📦 باز کن (+۱۲۰ 🪙)</button>
-        <h3>🌟 پرستیژ <span class="cost">(پیشرفتهای فعلی)</span></h3>
-        <button class="menu-btn danger" data-act="prestige">🌟 پرستیژ: سطح ۱ → سطح ${p.prestige + 1}</button>
+        <div class="hint-line">${t("frags", { a: frags, b: boosters })}</div>
+        <h3>${t("chestTitle")} <span class="cost">${t("chestCost")}</span></h3>
+        <button class="menu-btn" data-act="chest">${t("openChest")}</button>
+        <h3>${t("prestigeTitle")} <span class="cost">${t("prestigeCost")}</span></h3>
+        <button class="menu-btn danger" data-act="prestige">${t("prestigeBtn", { n: p.prestige + 1 })}</button>
       </div>`;
   }
 
@@ -688,29 +719,29 @@ export class UI {
     if (!s) return;
     const p = this.p();
     if (p.owned.includes(id)) { this.equip(id); return; }
-    if (s.price && !this.canUnlock(s)) { this.toast("ابتدا شرط را برآورده کن!", "🔒"); return; }
+    if (s.price && !this.canUnlock(s)) { this.toast(t("unlockFirst"), "🔒"); return; }
     if (spend(s.price || 0, s.currency === "gems" ? s.price : 0)) {
       unlockSkin(id);
       equipSkin(id);
       AudioSys.play("coin");
-      this.toast(`پوسته «${s.fa}» خریداری شد!`, s.icon);
+      this.toast(t("bought", { n: skinName(s) }), s.icon);
       this.show(this.screen === "collection" ? "collection" : "shop");
-    } else this.toast("سکه یا جواهر کافی نیست!", "💸");
+    } else this.toast(t("needCoins"), "💸");
   }
 
   equip(id) {
     if (equipSkin(id)) {
       AudioSys.play("skin");
-      this.toast("پوسته مجهز شد", "🎨");
+      this.toast(t("equippedToast"), "🎨");
       this.show(this.screen === "collection" ? "collection" : "shop");
     }
   }
 
   spinWheel() {
     const res = wheelSpin();
-    if (!res) { this.toast("۵۰ سکه کافی نیست!", "💸"); return; }
+    if (!res) { this.toast(t("noCoins"), "💸"); return; }
     if (res.cooldown) {
-      this.toast(`چرخ بعدی در ${formatCountdown(res.cooldown)}`, "⏳");
+      this.toast(t("cooldown", { n: formatCountdown(res.cooldown) }), "⏳");
       return;
     }
     this.wheelReveal(res);
@@ -721,9 +752,9 @@ export class UI {
     cin.innerHTML = `
       <div class="cin wheel-cin">
         <div class="wheel-spinner">🎡</div>
-        <div class="cin-kicker">چرخ بخت روزانه</div>
-        <div class="wheel-result">${res.icon} ${res.fa}${res.n ? ` +${res.n}` : ""}</div>
-        ${res.skinUnlocked ? `<div class="wheel-skin">🎉 پوسته «${res.skinUnlocked}» باز شد!</div>` : res.booster ? `<div class="wheel-booster">بوستر «${res.booster}» ذخیره شد — در مرحلهی بعدی خودکار فعال میشود</div>` : ""}
+        <div class="cin-kicker">${t("wheelKicker")}</div>
+        <div class="wheel-result">${res.icon} ${getLang() === "en" ? (res.en || res.fa) : res.fa}${res.n ? ` +${res.n}` : ""}</div>
+        ${res.skinUnlocked ? `<div class="wheel-skin">🎉 ${t("bought", { n: res.skinUnlocked })}</div>` : res.booster ? `<div class="wheel-booster">${t("wheelBooster", { n: res.booster })}</div>` : ""}
       </div>`;
     AudioSys.play("win");
     setTimeout(() => {
@@ -734,19 +765,19 @@ export class UI {
 
   openChest() {
     const res = chestOpen("coins");
-    if (!res) { this.toast("صندوق هنوز آماده نیست!", "📦"); return; }
+    if (!res) { this.toast(t("chestNotReady"), "📦"); return; }
     AudioSys.play("coin");
-    this.toast("🪙 +۱۲۰ سکه از صندوق!", "📦");
+    this.toast(t("chestGot"), "📦");
     this.show("shop");
   }
 
   doPrestige() {
     const p = this.p();
-    if (p.level < 5 && p.prestige === 0) { this.toast("برای پرستیژ به سطح ۵ نیاز داری", "🌟"); return; }
-    if (!confirm(`پرستیژ به سطح ${p.prestige + 1}؟ (سطوح و ستارهها ریست میشوند اما پوستهها میمانند)`)) return;
+    if (p.level < 5 && p.prestige === 0) { this.toast(t("prestigeNeed"), "🌟"); return; }
+    if (!confirm(t("prestigeConfirm", { n: p.prestige + 1 }))) return;
     prestige();
     AudioSys.play("levelup");
-    this.toast("پرستیژ! 🌟 +۵ جواهر", "🌟");
+    this.toast(t("prestigeDone"), "🌟");
     checkAchievements({});
     this.show("main");
   }
@@ -759,19 +790,20 @@ export class UI {
       const owned = p.owned.includes(s.id);
       const eq = p.skin === s.id;
       const locked = !owned && s.unlock && !this.canUnlock(s);
-      const price = s.price ? `${s.currency === "gems" ? "💎" : "🪙"} ${fmt(s.price)}` : "رایگان";
+      const price = s.price ? `${s.currency === "gems" ? "💎" : "🪙"} ${fmt(s.price)}` : t("free");
+      const unlockTxt = s.unlock ? (s.unlock.startsWith("achievement") ? t("unlockAch") : s.unlock.startsWith("event") ? t("unlockEvent") : t("unlockPrestige")) : "";
       return `<div class="shop-skin ${owned ? "owned" : "locked"} ${eq ? "eq" : ""} ${s.legendary ? "legendary" : ""}" data-act="${owned || !locked ? "preview:" + s.id : ""}" style="--sc1:${s.colors[0]};--sc2:${s.colors[1]}">
-        <div class="skin-icon">${s.icon}</div><div class="skin-name">${s.fa} ${s.legendary ? "🌟" : ""} ${s.seasonal ? "🎉" : ""}</div>
-        ${eq ? `<div class="skin-state">✔ مجهز</div>`
-          : owned ? `<button class="mini-btn" data-act="equip:${s.id}">مجهز کن</button>`
-          : locked ? `<div class="skin-state">${s.unlock.startsWith("achievement") ? "🔓 با دستاورد" : s.unlock.startsWith("event") ? "🎉 رویداد فصلی" : "🌟 پرستیژ"}</div>`
+        <div class="skin-icon">${s.icon}</div><div class="skin-name">${skinName(s)} ${s.legendary ? "🌟" : ""} ${s.seasonal ? "🎉" : ""}</div>
+        ${eq ? `<div class="skin-state">${t("equipped")}</div>`
+          : owned ? `<button class="mini-btn" data-act="equip:${s.id}">${t("equip")}</button>`
+          : locked ? `<div class="skin-state">${unlockTxt}</div>`
           : `<button class="mini-btn buy" data-act="buy-skin:${s.id}">${price}</button>`}
       </div>`;
     }).join("");
     return `
       <div class="skin-preview"><canvas id="skin-preview-canvas" width="280" height="120"></canvas><div class="skin-preview-name" id="skin-preview-name"></div></div>
       <div class="skin-grid">${rows}</div>
-      <div class="hint-line">پوستههای افسانهای 🌟 هیچ مزیت بازی ندارند — فقط ظاهر! روی هر پوسته بزن تا پیشنمایش ببینی.</div>`;
+      <div class="hint-line">${t("collectionHint")}</div>`;
   }
 
   afterCollection() {
@@ -785,7 +817,7 @@ export class UI {
     const nm = this.el("skin-preview-name");
     if (nm) {
       const s = SKINS.find((x) => x.id === this.previewSkin);
-      nm.textContent = s ? `${s.icon} ${s.fa}${s.legendary ? " 🌟" : ""}` : "";
+      nm.textContent = s ? `${s.icon} ${skinName(s)}${s.legendary ? " 🌟" : ""}` : "";
     }
   }
 
@@ -798,9 +830,9 @@ export class UI {
     const p = this.p();
     const rows = ACHIEVEMENTS.map((a) => {
       const got = p.achievements.includes(a.id);
-      return `<div class="ach ${got ? "got" : ""}"><span class="ach-icon">${got ? a.icon : "🔒"}</span><div class="ach-txt"><b>${a.fa}</b><small>${a.desc}</small></div><span class="ach-reward">+${a.reward} 🪙${a.rewardGems ? ` +${a.rewardGems} 💎` : ""}</span></div>`;
+      return `<div class="ach ${got ? "got" : ""}"><span class="ach-icon">${got ? a.icon : "🔒"}</span><div class="ach-txt"><b>${achName(a)}</b><small>${achDesc(a)}</small></div><span class="ach-reward">+${a.reward} 🪙${a.rewardGems ? ` +${a.rewardGems} 💎` : ""}</span></div>`;
     }).join("");
-    return `<div class="ach-count">${p.achievements.length}/${ACHIEVEMENTS.length} دستاورد</div><div class="ach-grid">${rows}</div>`;
+    return `<div class="ach-count">${t("achCount", { a: p.achievements.length, b: ACHIEVEMENTS.length })}</div><div class="ach-grid">${rows}</div>`;
   }
 
   // ---------- leaderboard ----------
@@ -809,17 +841,17 @@ export class UI {
     const entries = [...p.leaderboard].reverse().slice(0, 15);
     const rows = entries.length
       ? entries.map((e, i) => `<div class="lb-row"><span class="lb-rank">${i + 1}</span><span class="lb-score">${fmt(e.score)}</span><span class="lb-date">${e.date}</span></div>`).join("")
-      : `<div class="hint-line">هنوز رکوردی ثبت نشده — در حالت بیپایان بازی کن!</div>`;
+      : `<div class="hint-line">${t("lbEmpty")}</div>`;
     return `
       <div class="lb-bests">
-        <div class="lb-best"><b>♾ بیپایان</b><span>${fmt(p.best.endless)}</span></div>
-        <div class="lb-best"><b>🌞 روزانه</b><span>${fmt(p.best.daily)}</span></div>
-        <div class="lb-best"><b>📅 هفتگی</b><span>${fmt(p.best.weekly)}</span></div>
-        <div class="lb-best"><b>🗓 ماهانه</b><span>${fmt(p.best.monthly)}</span></div>
-        <div class="lb-best"><b>🏆 همیشه</b><span>${fmt(p.best.alltime)}</span></div>
+        <div class="lb-best"><b>${t("lbEndless")}</b><span>${fmt(p.best.endless)}</span></div>
+        <div class="lb-best"><b>${t("lbDaily")}</b><span>${fmt(p.best.daily)}</span></div>
+        <div class="lb-best"><b>${t("lbWeekly")}</b><span>${fmt(p.best.weekly)}</span></div>
+        <div class="lb-best"><b>${t("lbMonthly")}</b><span>${fmt(p.best.monthly)}</span></div>
+        <div class="lb-best"><b>${t("lbAlltime")}</b><span>${fmt(p.best.alltime)}</span></div>
       </div>
-      <h3>اخیر</h3><div class="lb-list">${rows}</div>
-      <div class="hint-line">اتصال به لیدربورد جهانی LoveHub بهزودی (Cloud Save).</div>`;
+      <h3>${t("recent")}</h3><div class="lb-list">${rows}</div>
+      <div class="hint-line">${t("cloudSoon")}</div>`;
   }
 
   afterLeaderboard() {}
@@ -837,6 +869,7 @@ export class UI {
       ${t("colorblind", "👁 حالت کوررنگی", "پالت جایگزین برای موانع")}
       ${t("leftHanded", "✋ چپدست", "جابهجایی دکمههای لمسی")}
       ${t("dragSteer", "🖐 رانندگی با انگشت", "مار با حرکت انگشت روی صفحه هدایت میشود (روشن) یا با کشیدن سوایپ (خاموش)")}
+      <button class="set-row set-row-btn" data-act="language"><span><b>${t("sLang", "🌐 زبان", "English / فارسی")}</b><small>English / فارسی</small></span><span class="skin-state">${getLang() === "en" ? "English 🇬🇧" : "فارسی 🇮🇷"} ←</span></button>
       <label class="set-row"><span><b>🎚 سختی</b><small>سرعت بازی</small></span>
         <select data-set="difficulty">${[0.8, 1, 1.25].map((d, i) => `<option value="${d}" ${s.difficulty === d ? "selected" : ""}>${["آسان", "عادی", "سخت"][i]}</option>`).join("")}</select></label>
       <label class="set-row"><span><b>⚡ نرخ فریم</b><small>۶۰ یا ۱۲۰</small></span>

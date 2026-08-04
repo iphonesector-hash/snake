@@ -13,6 +13,7 @@ export class Renderer {
     this.boardX = 0; this.boardY = 0; this.cell = 24;
     this.weatherPts = [];
     this.camX = 0; this.camY = 0; // camera follow offset (px)
+    this.zoom = 1; this.zoomCur = 1; // dynamic zoom (out as the snake grows)
     this.bgStars = [];
     this.battery = false;
     this.contrast = false;
@@ -59,17 +60,24 @@ export class Renderer {
     }
   }
 
-  // camera follow: smoothly drift the world toward the snake head
+  // camera follow: lead toward the snake head + look ahead in travel direction
   updateCamera(dt) {
     const g = this.game;
     if (!g.level) return;
     const hx = this.px(g.head.x) + this.cell / 2;
     const hy = this.py(g.head.y) + this.cell / 2;
     const cx = this.canvas.clientWidth / 2, cy = this.canvas.clientHeight / 2;
-    const tx = (hx - cx) * 0.06, ty = (hy - cy) * 0.06;
-    const k = Math.min(1, dt * 5);
+    // subtle lead so the player sees more of where the snake is heading
+    const lead = this.cell * (1.4 + Math.min(1.6, g.length * 0.04));
+    const tx = (hx - cx) * 0.09 + g.dir.x * lead;
+    const ty = (hy - cy) * 0.09 + g.dir.y * lead;
+    const k = Math.min(1, dt * 6);
     this.camX += (tx - this.camX) * k;
     this.camY += (ty - this.camY) * k;
+    // dynamic zoom: pull out as the snake grows so the whole body stays in view
+    const len = g.length || 3;
+    this.zoom = Math.max(0.86, Math.min(1, 1 - (len - 8) * 0.004));
+    this.zoomCur += (this.zoom - this.zoomCur) * Math.min(1, dt * 2.2);
   }
 
   px(x) { return this.boardX + x * this.cell; }
@@ -162,8 +170,11 @@ export class Renderer {
     this.drawBackground();
     this.drawParallax();
 
-    // world-space layers, drifted by camera + shake
+    // world-space layers, drifted by camera + shake, scaled by dynamic zoom
     ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(this.zoomCur, this.zoomCur);
+    ctx.translate(-w / 2, -h / 2);
     ctx.translate(-this.camX + sx, -this.camY + sy);
     this.drawBoard();
     this.drawEntities();
@@ -234,8 +245,8 @@ export class Renderer {
     const { ctx } = this;
     const l = this.game.level;
     const world = this.game.world;
-    // grid
-    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    // de-boxed grid: barely-there dots instead of a hard board grid
+    ctx.strokeStyle = "rgba(255,255,255,0.028)";
     ctx.lineWidth = 1;
     for (let x = 0; x <= l.cols; x++) {
       ctx.beginPath(); ctx.moveTo(this.px(x), this.boardY); ctx.lineTo(this.px(x), this.boardY + this.boardH); ctx.stroke();
@@ -527,6 +538,27 @@ export class Renderer {
     }));
   }
 
+  // tapered polyline: width shrinks from the head toward the tail for an organic body
+  strokeBodyTaper(pts, wHead, wTail, style) {
+    const { ctx } = this;
+    ctx.strokeStyle = style;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (pts.length === 1) {
+      ctx.lineWidth = wHead;
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[0].x + 0.01, pts[0].y); ctx.stroke();
+      return;
+    }
+    for (let i = 0; i < pts.length - 1; i++) {
+      const k = i / (pts.length - 1);
+      ctx.lineWidth = wHead + (wTail - wHead) * k;
+      ctx.beginPath();
+      ctx.moveTo(pts[i].x, pts[i].y);
+      ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+      ctx.stroke();
+    }
+  }
+
   drawSnake() {
     const g = this.game;
     const { ctx } = this;
@@ -547,21 +579,29 @@ export class Renderer {
     const glow = this.battery ? 0 : skin.glow || 8;
 
     // ---------- body ----------
+    // soft drop shadow for depth
+    const shPts = pts.map((p) => ({ x: p.x + this.cell * 0.08, y: p.y + this.cell * 0.12 }));
+    ctx.globalAlpha *= 0.7;
+    this.strokeBodyTaper(shPts, this.cell * 0.48, this.cell * 0.2, "rgba(0,0,0,0.32)");
+    ctx.globalAlpha = ghost ? 0.55 : invuln ? 0.4 : 1;
     // outer glow pass
     if (glow > 0) {
       ctx.shadowColor = skin.colors[0];
       ctx.shadowBlur = glow;
-      this.strokeBody(pts, n, this.cell * 0.46, skin.colors[0]);
+      this.strokeBodyTaper(pts, this.cell * 0.5, this.cell * 0.22, skin.colors[0]);
       ctx.shadowBlur = 0;
     }
-    // main body: gradient polyline
+    // main body: gradient polyline, tapered head→tail
     const grad = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[n - 1].x, pts[n - 1].y);
     grad.addColorStop(0, skin.colors[0]);
     grad.addColorStop(1, skin.colors[1]);
-    this.strokeBody(pts, n, this.cell * 0.42, grad);
-    // bright belly under-glow
+    this.strokeBodyTaper(pts, this.cell * 0.46, this.cell * 0.2, grad);
+    // lighting: bright specular band on the top-left edge
+    const hiPts = pts.map((p) => ({ x: p.x - this.cell * 0.05, y: p.y - this.cell * 0.05 }));
     ctx.globalAlpha *= 0.5;
-    this.strokeBody(pts, n, this.cell * 0.2, "rgba(255,255,255,0.35)");
+    this.strokeBodyTaper(hiPts, this.cell * 0.17, this.cell * 0.05, "rgba(255,255,255,0.42)");
+    // lighting: darker shading band on the bottom-right edge
+    this.strokeBodyTaper(shPts, this.cell * 0.34, this.cell * 0.12, "rgba(0,0,0,0.22)");
     ctx.globalAlpha = ghost ? 0.55 : invuln ? 0.4 : 1;
 
     // ---------- patterns ----------
@@ -817,12 +857,15 @@ export class Renderer {
       pts.push({ x, y });
     }
     ctx2.lineCap = "round"; ctx2.lineJoin = "round";
-    if (!this.battery) { ctx2.shadowColor = skin.colors[0]; ctx2.shadowBlur = 16; }
-    this.strokeBody(pts, pts.length, 16, skin.colors[0]);
+    ctx2.shadowColor = "rgba(0,0,0,0.35)"; ctx2.shadowBlur = 6;
+    this.strokeBodyTaper(pts.map((p) => ({ x: p.x + 2, y: p.y + 3 })), 18, 7, "rgba(0,0,0,0.3)");
     ctx2.shadowBlur = 0;
-    this.strokeBody(pts, pts.length, 13, skin.colors[1]);
-    ctx2.globalAlpha = 0.45;
-    this.strokeBody(pts, pts.length, 6, "rgba(255,255,255,0.4)");
+    if (!this.battery) { ctx2.shadowColor = skin.colors[0]; ctx2.shadowBlur = 16; }
+    this.strokeBodyTaper(pts, 17, 7, skin.colors[0]);
+    ctx2.shadowBlur = 0;
+    this.strokeBodyTaper(pts, 14, 5, skin.colors[1]);
+    ctx2.globalAlpha = 0.5;
+    this.strokeBodyTaper(pts.map((p) => ({ x: p.x - 1.5, y: p.y - 1.5 })), 6, 2, "rgba(255,255,255,0.5)");
     ctx2.globalAlpha = 1;
     // head at pts[0]
     const h = pts[0];

@@ -25,7 +25,7 @@ const DEFAULTS = () => ({
   questDate: "",
   runs: [], // replay logs (capped)
   wheel: { lastSpin: 0, fragments: 0, boosters: [] },
-  settings: { sfx: true, music: true, motion: true, contrast: false, colorblind: false, leftHanded: false, dragSteer: true, difficulty: 1, battery: false, fps: 60 },
+  settings: { sfx: true, music: true, motion: true, contrast: false, colorblind: false, leftHanded: false, dragSteer: true, difficulty: 1, battery: false, fps: 60, lang: "" },
 });
 
 let PROFILE = null;
