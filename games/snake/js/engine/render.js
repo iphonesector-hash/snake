@@ -12,6 +12,8 @@ export class Renderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.boardX = 0; this.boardY = 0; this.cell = 24;
     this.weatherPts = [];
+    this.camX = 0; this.camY = 0; // camera follow offset (px)
+    this.bgStars = [];
     this.battery = false;
     this.contrast = false;
     this.colorblind = false;
@@ -35,11 +37,39 @@ export class Renderer {
     const l = this.game.level;
     if (!l) return;
     const cw = this.canvas.clientWidth, ch = this.canvas.clientHeight;
-    this.cell = Math.max(12, Math.floor(Math.min((cw - 20) / l.cols, (ch - 20) / l.rows)));
+    // fill the entire screen (iPhone / Android full-bleed)
+    const pad = Math.min(cw, ch) * 0.015;
+    this.cell = Math.max(11, Math.floor(Math.min((cw - pad * 2) / l.cols, (ch - pad * 2) / l.rows)));
     this.boardW = this.cell * l.cols;
     this.boardH = this.cell * l.rows;
-    this.boardX = (cw - this.boardW) / 2;
-    this.boardY = (ch - this.boardH) / 2;
+    this.boardX = Math.max(pad, (cw - this.boardW) / 2);
+    this.boardY = Math.max(pad, (ch - this.boardH) / 2);
+    if (!this.bgStars.length) this.seedStars(cw, ch);
+  }
+
+  seedStars(w, h) {
+    this.bgStars = [];
+    const n = this.battery ? 24 : 48;
+    for (let i = 0; i < n; i++) {
+      this.bgStars.push({
+        x: Math.random() * w, y: Math.random() * h,
+        r: 0.5 + Math.random() * 1.6, layer: Math.random() < 0.4 ? 0.5 : 1,
+        tw: Math.random() * 6.28, sp: 0.5 + Math.random() * 1.4,
+      });
+    }
+  }
+
+  // camera follow: smoothly drift the world toward the snake head
+  updateCamera(dt) {
+    const g = this.game;
+    if (!g.level) return;
+    const hx = this.px(g.head.x) + this.cell / 2;
+    const hy = this.py(g.head.y) + this.cell / 2;
+    const cx = this.canvas.clientWidth / 2, cy = this.canvas.clientHeight / 2;
+    const tx = (hx - cx) * 0.06, ty = (hy - cy) * 0.06;
+    const k = Math.min(1, dt * 5);
+    this.camX += (tx - this.camX) * k;
+    this.camY += (ty - this.camY) * k;
   }
 
   px(x) { return this.boardX + x * this.cell; }
@@ -126,10 +156,15 @@ export class Renderer {
     // shake offset
     const sx = (Math.random() - 0.5) * g.shakeAmt;
     const sy = (Math.random() - 0.5) * g.shakeAmt;
+    this.updateCamera(0.016);
 
-    ctx.save();
-    ctx.translate(sx, sy);
+    // screen-space backdrop (always covers the whole canvas)
     this.drawBackground();
+    this.drawParallax();
+
+    // world-space layers, drifted by camera + shake
+    ctx.save();
+    ctx.translate(-this.camX + sx, -this.camY + sy);
     this.drawBoard();
     this.drawEntities();
     if (g.boss) this.drawBoss();
@@ -138,9 +173,9 @@ export class Renderer {
     ctx.restore();
 
     // vignette
-    const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.72);
+    const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.42, w / 2, h / 2, Math.max(w, h) * 0.78);
     v.addColorStop(0, "rgba(0,0,0,0)");
-    v.addColorStop(1, "rgba(0,0,0,0.42)");
+    v.addColorStop(1, "rgba(0,0,0,0.35)");
     ctx.fillStyle = v;
     ctx.fillRect(0, 0, w, h);
 
@@ -154,22 +189,44 @@ export class Renderer {
   drawBackground() {
     const { ctx } = this;
     const world = this.game.world;
-    const g = ctx.createLinearGradient(0, this.boardY, 0, this.boardY + this.boardH);
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    const g = ctx.createLinearGradient(0, 0, 0, h);
     g.addColorStop(0, world.bg[0]);
     g.addColorStop(1, world.bg[1]);
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, this.canvas.clientWidth, this.canvas.clientHeight);
-    // ambient glow blobs
-    ctx.globalAlpha = 0.08;
+    ctx.fillRect(0, 0, w, h);
+    // ambient glow blobs (full-bleed, drifting)
+    ctx.globalAlpha = 0.1;
     ctx.fillStyle = world.c1;
     const t = this.game.time;
-    for (let i = 0; i < 3; i++) {
-      const bx = this.boardX + this.boardW * (0.2 + i * 0.3) + Math.sin(t * 0.4 + i * 2) * 30;
-      const by = this.boardY + this.boardH * (0.3 + (i % 2) * 0.4);
+    for (let i = 0; i < 4; i++) {
+      const bx = w * (0.15 + i * 0.25) + Math.sin(t * 0.3 + i * 2.1) * w * 0.04;
+      const by = h * (0.2 + (i % 2) * 0.4) + Math.cos(t * 0.24 + i * 1.7) * h * 0.05;
       ctx.beginPath();
-      ctx.arc(bx, by, 90 + i * 40, 0, Math.PI * 2);
+      ctx.arc(bx, by, 90 + i * 46, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
+  }
+
+  // depth parallax layer: stars / dust drifting behind the world
+  drawParallax() {
+    const { ctx } = this;
+    const t = this.game.time;
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    if (this.battery) return;
+    ctx.save();
+    for (const s of this.bgStars) {
+      const drift = Math.sin(t * s.sp + s.tw) * 8;
+      const px = ((s.x + this.camX * 0.4 + drift) % w + w) % w;
+      const py = ((s.y + this.camY * 0.4 + t * 6 * s.layer) % h + h) % h;
+      ctx.globalAlpha = 0.18 + Math.sin(t * 2 + s.tw) * 0.12 * s.layer;
+      ctx.fillStyle = s.layer > 0.7 ? "#ffffff" : "#93c5fd";
+      ctx.beginPath();
+      ctx.arc(px, py, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
     ctx.globalAlpha = 1;
   }
 
@@ -366,6 +423,23 @@ export class Renderer {
         ctx.shadowBlur = 0; ctx.fillStyle = "#fff";
         ctx.font = "10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText("⚡", x, y);
+      } else if (f.kind === "treasure") {
+        const bob = 0.5 + Math.sin(t * 5 + f.x) * 0.2;
+        ctx.shadowColor = "#fde047"; ctx.shadowBlur = 14;
+        ctx.fillStyle = "#b45309";
+        ctx.beginPath();
+        ctx.moveTo(x - this.cell * 0.22, y + this.cell * 0.12);
+        ctx.lineTo(x + this.cell * 0.22, y + this.cell * 0.12);
+        ctx.lineTo(x + this.cell * 0.14, y - this.cell * 0.26);
+        ctx.lineTo(x - this.cell * 0.14, y - this.cell * 0.26);
+        ctx.closePath(); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#fde047";
+        ctx.font = `${Math.floor(this.cell * 0.3)}px system-ui`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.globalAlpha = bob;
+        ctx.fillText("💎", x, y - this.cell * 0.04);
+        ctx.globalAlpha = 1;
       } else {
         const gold = f.kind === "gold";
         const col = gold ? "#fde047" : "#ef4444";
@@ -445,90 +519,91 @@ export class Renderer {
     return sp * sp * (3 - 2 * sp); // smoothstep: 0=at new cell
   }
 
+  // ---------- premium snake ----------
+  skinPoints(g, f) {
+    return g.segments.map((s) => ({
+      x: this.px(s.px + (s.x - s.px) * f) + this.cell / 2,
+      y: this.py(s.py + (s.y - s.py) * f) + this.cell / 2,
+    }));
+  }
+
   drawSnake() {
     const g = this.game;
     const { ctx } = this;
     const skin = skinById(g.skinId) || skinById("classic");
-    const cols = skin.colors;
     const f = this.lerpF();
     const invuln = g.invulnT > 0 && Math.sin(g.time * 24) > 0;
     const ghost = !!g.powerups.ghost;
     const fire = !!g.powerups.fire;
     const shield = !!g.powerups.shield;
+    const pts = this.skinPoints(g, f);
+    if (!pts.length) return;
 
     ctx.save();
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.globalAlpha = ghost ? 0.55 : invuln ? 0.4 : 1;
 
-    const n = g.segments.length;
-    // trail glow
-    const trail = skin.trail;
-    if (trail && !this.battery) {
-      ctx.strokeStyle = trail === "neon" ? "#22d3ee" : trail === "gold" ? "#fde047" : trail === "ice" ? "#a5f3fc" : trail === "fire" ? "#fb923c" : trail === "shadow" ? "#a78bfa" : trail === "rainbow" ? `hsl(${(g.time * 200) % 360},90%,65%)` : cols[0];
-      ctx.globalAlpha *= 0.35;
-      ctx.lineWidth = this.cell * 0.62;
-      ctx.beginPath();
-      g.segments.forEach((s, i) => {
-        const x = this.px(s.px + (s.x - s.px) * f) + this.cell / 2;
-        const y = this.py(s.py + (s.y - s.py) * f) + this.cell / 2;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.globalAlpha = ghost ? 0.55 : invuln ? 0.4 : 1;
-    }
-    // body
-    for (let i = n - 1; i >= 0; i--) {
-      const s = g.segments[i];
-      const x = this.px(s.px + (s.x - s.px) * f) + this.cell / 2;
-      const y = this.py(s.py + (s.y - s.py) * f) + this.cell / 2;
-      const k = i / Math.max(1, n - 1);
-      const r = this.cell * 0.42 * (1 - k * 0.28);
-      const c = i % 2 === 0 ? cols[0] : cols[1];
-      ctx.fillStyle = c;
-      if (this.battery) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-      else {
-        ctx.shadowColor = cols[0]; ctx.shadowBlur = 8;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "rgba(255,255,255,0.12)";
-        ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.55, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-    // head
-    const h = g.head;
-    const hx = this.px(h.px + (h.x - h.px) * f) + this.cell / 2;
-    const hy = this.py(h.py + (h.y - h.py) * f) + this.cell / 2;
-    const hr = this.cell * 0.48;
-    ctx.fillStyle = cols[0];
-    ctx.shadowColor = cols[0]; ctx.shadowBlur = fire ? 20 : 12;
-    ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
-    // eyes
-    const dx = g.dir.x, dy = g.dir.y;
-    const pxx = -dy, pyy = dx; // perpendicular
-    const ex = hx + dx * hr * 0.35, ey = hy + dy * hr * 0.35;
-    const eyeStyle = skin.eyes;
-    if (eyeStyle === "square") {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(ex + pxx * hr * 0.35 - 2.5, ey + pyy * hr * 0.35 - 2.5, 5, 5);
-      ctx.fillRect(ex - pxx * hr * 0.35 - 2.5, ey - pyy * hr * 0.35 - 2.5, 5, 5);
-      ctx.fillStyle = "#000";
-      ctx.fillRect(ex + pxx * hr * 0.35 - 1.2, ey + pyy * hr * 0.35 - 1.2, 2.4, 2.4);
-      ctx.fillRect(ex - pxx * hr * 0.35 - 1.2, ey - pyy * hr * 0.35 - 1.2, 2.4, 2.4);
-    } else if (eyeStyle === "star" || eyeStyle === "glow") {
-      ctx.fillStyle = eyeStyle === "star" ? "#fde047" : "#fff";
-      ctx.shadowColor = eyeStyle === "star" ? "#fde047" : "#22d3ee"; ctx.shadowBlur = 8;
-      ctx.beginPath(); ctx.arc(ex + pxx * hr * 0.35, ey + pyy * hr * 0.35, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(ex - pxx * hr * 0.35, ey - pyy * hr * 0.35, 3, 0, Math.PI * 2); ctx.fill();
+    const n = pts.length;
+    const glow = this.battery ? 0 : skin.glow || 8;
+
+    // ---------- body ----------
+    // outer glow pass
+    if (glow > 0) {
+      ctx.shadowColor = skin.colors[0];
+      ctx.shadowBlur = glow;
+      this.strokeBody(pts, n, this.cell * 0.46, skin.colors[0]);
       ctx.shadowBlur = 0;
-    } else {
-      ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(ex + pxx * hr * 0.35, ey + pyy * hr * 0.35, 3.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(ex - pxx * hr * 0.35, ey - pyy * hr * 0.35, 3.2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#000";
-      ctx.beginPath(); ctx.arc(ex + pxx * hr * 0.35 + dx * 1.2, ey + pyy * hr * 0.35 + dy * 1.2, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(ex - pxx * hr * 0.35 + dx * 1.2, ey - pyy * hr * 0.35 + dy * 1.2, 1.5, 0, Math.PI * 2); ctx.fill();
     }
+    // main body: gradient polyline
+    const grad = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[n - 1].x, pts[n - 1].y);
+    grad.addColorStop(0, skin.colors[0]);
+    grad.addColorStop(1, skin.colors[1]);
+    this.strokeBody(pts, n, this.cell * 0.42, grad);
+    // bright belly under-glow
+    ctx.globalAlpha *= 0.5;
+    this.strokeBody(pts, n, this.cell * 0.2, "rgba(255,255,255,0.35)");
+    ctx.globalAlpha = ghost ? 0.55 : invuln ? 0.4 : 1;
+
+    // ---------- patterns ----------
+    this.drawPattern(skin, pts, n);
+
+    // ---------- head ----------
+    const h = g.head;
+    const hx = pts[0].x, hy = pts[0].y;
+    const hr = this.cell * 0.5;
+    const dx = g.dir.x, dy = g.dir.y;
+    const a = Math.atan2(dy, dx);
+    const pulse = 0.9 + Math.sin(g.time * 6) * 0.08;
+
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(a);
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = skin.colors[0];
+    ctx.shadowBlur = fire ? 24 : glow;
+
+    this.drawHead(skin, hr, fire);
+    ctx.shadowBlur = 0;
+
+    // tongue flick
+    if (Math.sin(g.time * 7) > 0.4) {
+      const tl = hr * 0.9;
+      ctx.strokeStyle = "#f87171";
+      ctx.lineWidth = Math.max(1.5, hr * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(hr * 0.7, 0);
+      ctx.lineTo(hr * 0.7 + tl, 0);
+      ctx.moveTo(hr * 0.7 + tl, 0);
+      ctx.lineTo(hr * 0.7 + tl + hr * 0.25, -hr * 0.22);
+      ctx.moveTo(hr * 0.7 + tl, 0);
+      ctx.lineTo(hr * 0.7 + tl + hr * 0.25, hr * 0.22);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // eyes (drawn in world space, forward-aligned)
+    this.drawEyes(skin, hx, hy, a, hr);
+
     // powerup auras
     if (fire) {
       ctx.fillStyle = "rgba(251,146,60,0.35)";
@@ -543,6 +618,226 @@ export class Renderer {
       ctx.setLineDash([]);
     }
     ctx.restore();
+  }
+
+  strokeBody(pts, n, width, style) {
+    const { ctx } = this;
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    if (n === 1) { ctx.arc(pts[0].x, pts[0].y, width / 2, 0, Math.PI * 2); ctx.fill(); return; }
+    ctx.moveTo(pts[0].x, pts[0].y);
+    // smooth through midpoints
+    for (let i = 1; i < n - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    ctx.lineTo(pts[n - 1].x, pts[n - 1].y);
+    ctx.stroke();
+  }
+
+  drawPattern(skin, pts, n) {
+    const { ctx } = this;
+    const pat = skin.pattern;
+    if (!pat || pat === "none" || n < 3) return;
+    const step = Math.max(1, Math.floor(n / 10));
+    const t = this.game.time;
+    for (let i = 1; i < n - 1; i += step) {
+      const p = pts[i];
+      const r = this.cell * 0.42;
+      if (pat === "stripes" && (i / step) % 2 === 0) {
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.5, 0, Math.PI * 2); ctx.fill();
+      } else if (pat === "diamond") {
+        ctx.fillStyle = `rgba(255,255,255,${0.22 + Math.sin(t * 3 + i) * 0.08})`;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-r * 0.3, -r * 0.3, r * 0.6, r * 0.6);
+        ctx.restore();
+      } else if (pat === "scales") {
+        ctx.strokeStyle = "rgba(255,255,255,0.28)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.45, -1.2, 1.2); ctx.stroke();
+      } else if (pat === "hex") {
+        ctx.fillStyle = `rgba(255,255,255,${0.16 + Math.sin(t * 4 + i * 2) * 0.08})`;
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const ang = (Math.PI / 3) * k + Math.PI / 6;
+          const px = p.x + Math.cos(ang) * r * 0.35, py = p.y + Math.sin(ang) * r * 0.35;
+          k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath(); ctx.fill();
+      } else if (pat === "pulse" && i % (step * 2) === 0) {
+        const br = r * (0.5 + Math.abs(Math.sin(t * 5 + i)) * 0.5);
+        ctx.fillStyle = `rgba(255,${120 + Math.sin(t * 5 + i) * 60},60,0.5)`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, br, 0, Math.PI * 2); ctx.fill();
+      } else if (pat === "rainbow") {
+        ctx.fillStyle = `hsl(${(t * 160 + i * 24) % 360},90%,62%)`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  drawHead(skin, hr, fire) {
+    const { ctx } = this;
+    const c0 = skin.colors[0], c1 = skin.colors[1];
+    const head = skin.head || "round";
+    // base head shape
+    ctx.beginPath();
+    if (head === "crystal" || head === "prism") {
+      ctx.moveTo(hr * 1.1, 0);
+      ctx.lineTo(hr * 0.3, -hr * 0.75);
+      ctx.lineTo(-hr * 0.7, -hr * 0.5);
+      ctx.lineTo(-hr * 0.7, hr * 0.5);
+      ctx.lineTo(hr * 0.3, hr * 0.75);
+      ctx.closePath();
+    } else if (head === "visor" || head === "drone") {
+      ctx.moveTo(hr * 1.15, 0);
+      ctx.quadraticCurveTo(hr * 0.2, -hr * 0.85, -hr * 0.85, -hr * 0.45);
+      ctx.lineTo(-hr * 0.85, hr * 0.45);
+      ctx.quadraticCurveTo(hr * 0.2, hr * 0.85, hr * 1.15, 0);
+      ctx.closePath();
+    } else {
+      ctx.arc(0, 0, hr, 0, Math.PI * 2);
+    }
+    const hg = ctx.createLinearGradient(-hr, -hr, hr, hr);
+    hg.addColorStop(0, c0);
+    hg.addColorStop(1, c1);
+    ctx.fillStyle = hg;
+    ctx.fill();
+
+    // head accessories
+    if (head === "crown") {
+      ctx.fillStyle = "#fde047";
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * hr * 0.35 - hr * 0.16, -hr * 0.5);
+        ctx.lineTo(i * hr * 0.35, -hr * 1.05);
+        ctx.lineTo(i * hr * 0.35 + hr * 0.16, -hr * 0.5);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = "#fbbf24";
+      ctx.fillRect(-hr * 0.5, -hr * 0.55, hr, hr * 0.22);
+    } else if (head === "horns") {
+      ctx.strokeStyle = "#7c2d12";
+      ctx.lineWidth = hr * 0.18;
+      ctx.beginPath(); ctx.moveTo(-hr * 0.5, -hr * 0.4); ctx.quadraticCurveTo(-hr * 0.7, -hr * 1.1, -hr * 0.2, -hr * 1.15); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hr * 0.5, -hr * 0.4); ctx.quadraticCurveTo(hr * 0.7, -hr * 1.1, hr * 0.2, -hr * 1.15); ctx.stroke();
+      if (fire) {
+        ctx.fillStyle = "rgba(251,146,60,0.8)";
+        ctx.beginPath(); ctx.arc(-hr * 0.2, -hr * 1.15, hr * 0.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hr * 0.2, -hr * 1.15, hr * 0.2, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (head === "fang" || head === "royal") {
+      ctx.fillStyle = head === "royal" ? "#fde047" : "#fff";
+      ctx.beginPath(); ctx.moveTo(hr * 0.7, 0); ctx.lineTo(hr * 1.25, hr * 0.3); ctx.lineTo(hr * 0.7, hr * 0.5); ctx.closePath(); ctx.fill();
+      if (head === "royal") {
+        ctx.strokeStyle = "#f0abfc"; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(0, 0, hr * 1.25, -Math.PI * 0.9, Math.PI * 0.9); ctx.stroke();
+      }
+    } else if (head === "visor") {
+      ctx.fillStyle = "rgba(8,145,178,0.95)";
+      ctx.fillRect(-hr * 0.1, -hr * 0.5, hr * 1.0, hr * 1.0);
+      ctx.fillStyle = "rgba(165,243,252,0.9)";
+      ctx.fillRect(hr * 0.4, -hr * 0.55, hr * 0.28, hr * 1.1);
+    } else if (head === "drone") {
+      ctx.fillStyle = "#22d3ee";
+      ctx.beginPath(); ctx.arc(hr * 0.45, -hr * 0.3, hr * 0.2, 0, Math.PI * 2); ctx.arc(hr * 0.45, hr * 0.3, hr * 0.2, 0, Math.PI * 2); ctx.fill();
+    }
+    // gloss highlight
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath(); ctx.ellipse(-hr * 0.25, -hr * 0.35, hr * 0.45, hr * 0.22, -0.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  drawEyes(skin, hx, hy, a, hr) {
+    const { ctx } = this;
+    const off = hr * 0.38;
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(a);
+    const eyeStyle = skin.eyes || "normal";
+    const glowC = skin.colors[0];
+    const eyes = [[-off * 0.15, -off], [-off * 0.15, off]];
+    for (const [ex, ey] of eyes) {
+      if (eyeStyle === "square") {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(ex - 3, ey - 3, 6, 6);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(ex - 1.2, ey - 1.2, 2.4, 2.4);
+      } else if (eyeStyle === "star") {
+        ctx.fillStyle = "#fde047";
+        ctx.shadowColor = "#fde047"; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(ex, ey, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      } else if (eyeStyle === "fire") {
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "#f97316"; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.arc(ex, ey, 3.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fb923c";
+        ctx.beginPath(); ctx.arc(ex - 0.6, ey - 0.6, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      } else if (eyeStyle === "glow") {
+        ctx.fillStyle = glowC;
+        ctx.shadowColor = glowC; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(ex, ey, 3.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#0f172a";
+        ctx.beginPath(); ctx.arc(ex + 1, ey, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // animated preview used by the snake-selection screen
+  drawSkinPreview(canvas, skinId, t) {
+    const ctx2 = canvas.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const skin = skinById(skinId) || skinById("classic");
+    const cx = W / 2, cy = H / 2;
+    ctx2.clearRect(0, 0, W, H);
+    // ambient ring
+    const rg = ctx2.createRadialGradient(cx, cy, 8, cx, cy, Math.min(W, H) * 0.46);
+    rg.addColorStop(0, "rgba(255,255,255,0.06)");
+    rg.addColorStop(1, "rgba(255,255,255,0)");
+    ctx2.fillStyle = rg;
+    ctx2.fillRect(0, 0, W, H);
+    // snake body as a smooth wave
+    const amp = Math.min(W, H) * 0.16;
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const k = i / 24;
+      const x = cx + Math.cos(t * 1.4 + k * Math.PI * 2) * Math.min(W, H) * 0.3;
+      const y = cy + Math.sin(t * 1.4 + k * Math.PI * 2 + 0.6) * amp * (1 - k * 0.4);
+      pts.push({ x, y });
+    }
+    ctx2.lineCap = "round"; ctx2.lineJoin = "round";
+    if (!this.battery) { ctx2.shadowColor = skin.colors[0]; ctx2.shadowBlur = 16; }
+    this.strokeBody(pts, pts.length, 16, skin.colors[0]);
+    ctx2.shadowBlur = 0;
+    this.strokeBody(pts, pts.length, 13, skin.colors[1]);
+    ctx2.globalAlpha = 0.45;
+    this.strokeBody(pts, pts.length, 6, "rgba(255,255,255,0.4)");
+    ctx2.globalAlpha = 1;
+    // head at pts[0]
+    const h = pts[0];
+    const nxt = pts[1];
+    const a = Math.atan2(nxt.y - h.y, nxt.x - h.x);
+    ctx2.save();
+    ctx2.translate(h.x, h.y);
+    ctx2.rotate(a);
+    ctx2.scale(1 + Math.sin(t * 6) * 0.06, 1 + Math.sin(t * 6) * 0.06);
+    ctx2.shadowColor = skin.colors[0];
+    ctx2.shadowBlur = skin.glow || 8;
+    this.drawHead(skin, 13, false);
+    ctx2.shadowBlur = 0;
+    ctx2.restore();
+    this.drawEyes(skin, h.x, h.y, a, 13);
   }
 
   drawWeatherOverlay() {

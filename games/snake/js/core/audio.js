@@ -108,6 +108,11 @@ class AudioEngine {
       case "portal":   this._tone(330, 0.3, "sine", 0.16, 660); this._tone(660, 0.3, "sine", 0.14, 1320, this.ctx.currentTime + 0.12); this._noise(0.3, 0.08, 3000); break;
       case "shock":    this._noise(0.4, 0.3, 2500); this._tone(200, 0.3, "square", 0.14, 60); break;
       case "tick":     this._tone(200, 0.03, "square", 0.04, 180); break;
+      case "skin":     this._tone(660, 0.12, "triangle", 0.16, 880); this._tone(880, 0.16, "sine", 0.12, 1108, this.ctx.currentTime + 0.09); break;
+      case "combo":    { const n = Math.min(combo || 1, 12); this._tone(500 + n * 55, 0.07, "triangle", 0.1, 700 + n * 55); break; }
+      case "reward":   this._tone(523, 0.1, "triangle", 0.15, 659); this._tone(784, 0.12, "triangle", 0.13, 1046, this.ctx.currentTime + 0.08); this._tone(1046, 0.22, "sine", 0.12, 1568, this.ctx.currentTime + 0.16); break;
+      case "event":    this._tone(392, 0.14, "square", 0.1, 523); this._tone(523, 0.14, "square", 0.1, 659, this.ctx.currentTime + 0.12); this._tone(659, 0.24, "square", 0.1, 784, this.ctx.currentTime + 0.24); break;
+      case "swish":    this._noise(0.08, 0.06, 2600); break;
     }
   }
 

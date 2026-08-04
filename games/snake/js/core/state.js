@@ -1,7 +1,8 @@
 // LoveHub Snake — persistent player profile + localStorage state.
-import { ACHIEVEMENTS, totalStars, newDailyQuests } from "./content.js";
+import { ACHIEVEMENTS, totalStars, newDailyQuests, SKINS } from "./content.js";
 
 const SAVE_KEY = "lovehub.snake.v1";
+const WHEEL_COOLDOWN = 24 * 3600000; // 24h between lucky-wheel spins
 
 const DEFAULTS = () => ({
   coins: 150,
@@ -23,7 +24,8 @@ const DEFAULTS = () => ({
   quests: [],
   questDate: "",
   runs: [], // replay logs (capped)
-  settings: { sfx: true, music: true, motion: true, contrast: false, colorblind: false, leftHanded: false, difficulty: 1, battery: false, fps: 60 },
+  wheel: { lastSpin: 0, fragments: 0, boosters: [] },
+  settings: { sfx: true, music: true, motion: true, contrast: false, colorblind: false, leftHanded: false, dragSteer: true, difficulty: 1, battery: false, fps: 60 },
 });
 
 let PROFILE = null;
@@ -214,22 +216,75 @@ export function equipSkin(id) {
   return true;
 }
 
+export function wheelRemaining() {
+  const p = profile();
+  const left = (p.wheel?.lastSpin || 0) + WHEEL_COOLDOWN - Date.now();
+  return left > 0 ? left : 0;
+}
+
 export function wheelSpin() {
   const p = profile();
+  const cooldown = wheelRemaining();
+  if (cooldown > 0) return { cooldown };
   if (p.coins < 50) return null;
   p.coins -= 50;
+  p.wheel = p.wheel || { lastSpin: 0, fragments: 0, boosters: [] };
+  p.wheel.lastSpin = Date.now();
   const roll = Math.random();
   let res;
-  if (roll < 0.45) res = { kind: "coins", n: 100 };
-  else if (roll < 0.7) res = { kind: "coins", n: 200 };
-  else if (roll < 0.85) res = { kind: "gems", n: 2 };
-  else if (roll < 0.94) res = { kind: "coins", n: 500 };
-  else res = { kind: "gems", n: 5 };
+  if (roll < 0.3) res = { kind: "coins", n: 120, icon: "🪙", fa: "سکه" };
+  else if (roll < 0.5) res = { kind: "coins", n: 250, icon: "🪙", fa: "سکه" };
+  else if (roll < 0.62) res = { kind: "gems", n: 1, icon: "💎", fa: "جواهر" };
+  else if (roll < 0.72) res = { kind: "gems", n: 3, icon: "💎", fa: "جواهر" };
+  else if (roll < 0.8) res = { kind: "xp", n: 90, icon: "⭐", fa: "XP" };
+  else if (roll < 0.88) res = { kind: "booster", booster: pickBooster(), icon: "⏫", fa: "بوستر" };
+  else if (roll < 0.97) res = { kind: "fragment", n: 1, icon: "🧩", fa: "تکه پوست" };
+  else res = { kind: "gems", n: 6, icon: "💎", fa: "جواهر نایاب" };
   p.stats.wheelSpins++;
   if (res.kind === "coins") grant(res.n, 0, 0, 0);
-  else grant(0, res.n, 0, 0);
+  else if (res.kind === "gems") grant(0, res.n, 0, 0);
+  else if (res.kind === "xp") grant(0, 0, 0, res.n);
+  else if (res.kind === "booster") {
+    p.wheel.boosters = p.wheel.boosters || [];
+    p.wheel.boosters.push(res.booster);
+    if (p.wheel.boosters.length > 9) p.wheel.boosters.length = 9;
+  } else if (res.kind === "fragment") {
+    p.wheel.fragments = (p.wheel.fragments || 0) + res.n;
+    if (p.wheel.fragments >= 8) {
+      // 8 fragments = one random legendary-unlocked skin fragment unlock
+      p.wheel.fragments -= 8;
+      const locked = SKINS.filter((s) => s.legendary && !p.owned.includes(s.id) && !(s.unlock && s.unlock.startsWith("achievement")));
+      if (locked.length) {
+        const won = locked[Math.floor(Math.random() * locked.length)];
+        unlockSkin(won.id);
+        res.skinUnlocked = won.fa;
+        res.kind = "skin";
+      } else res.skinUnlocked = null;
+    }
+  }
   saveProfile();
   return res;
+}
+
+function pickBooster() {
+  const pool = ["speed", "shield", "magnet", "fire", "ghost"];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+export function consumeBooster() {
+  const p = profile();
+  if (!p.wheel?.boosters?.length) return null;
+  const b = p.wheel.boosters.shift();
+  saveProfile();
+  return b;
+}
+
+export function formatCountdown(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
 }
 
 export function chestOpen(kind) {

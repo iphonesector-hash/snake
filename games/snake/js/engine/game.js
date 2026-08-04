@@ -60,6 +60,12 @@ export class Game {
     this.replayLog = [];
     this.secretFound = false;
     this.weatherT = 0;
+    this.eventCd = 0;          // seconds until next random event
+    this.eventName = null;     // currently active event label
+    this.eventSpeed = 0;       // seconds of speed-surge event remaining
+    this.eventSurvival = 0;    // seconds left in survival event
+    this.eventSurvivalMax = 0;
+    this.treasureEarned = 0;
   }
 
   startLevel(level, mode = "campaign", opts = {}) {
@@ -96,6 +102,12 @@ export class Game {
     this.secretFound = false;
     this.portalReached = false;
     this.endlessRegenT = 30;
+    this.eventCd = 0;
+    this.eventName = null;
+    this.eventSpeed = 0;
+    this.eventSurvival = 0;
+    this.eventSurvivalMax = 0;
+    this.treasureEarned = 0;
     if (this.deathTimer) { clearTimeout(this.deathTimer); this.deathTimer = null; }
     this.shakeAmt = 0; this.flashT = 0; this.slowmo = 0;
     this.over = false; this.paused = false; this.running = true;
@@ -109,15 +121,17 @@ export class Game {
 
   // ---------- input ----------
   queueDir(dx, dy) {
-    if (this.over || this.paused || this.replayMode) return;
+    if (this.over || this.paused || this.replayMode) return false;
     const last = this.queue.length ? this.queue[this.queue.length - 1] : this.dir;
-    if (last.x === dx && last.y === dy) return;
-    if (last.x === -dx && last.y === -dy) return;
-    if (this.queue.length < 3) this.queue.push({ x: dx, y: dy });
+    if (last.x === dx && last.y === dy) return false;
+    if (last.x === -dx && last.y === -dy) return false;
+    if (this.queue.length < 3) { this.queue.push({ x: dx, y: dy }); return true; }
+    return false;
   }
 
   inputDir(dx, dy) {
-    this.queueDir(dx, dy);
+    const changed = this.queueDir(dx, dy);
+    if (changed && this.stepCount > 2) this.audio.play("swish");
     if (!this.replayMode) this.inputLog.push({ s: this.stepCount, dx, dy });
   }
 
@@ -144,6 +158,7 @@ export class Game {
   speedMul() {
     let m = this.difficulty || 1;
     if (this.powerups.speed) m *= 1.55;
+    if (this.eventSpeed > 0) m *= 1.5; // speed-surge event
     if (this.world.weather === "snow") m *= 0.95;
     return m;
   }
@@ -239,6 +254,17 @@ export class Game {
     if (fi >= 0) {
       const f = ents.foods[fi];
       ents.foods.splice(fi, 1);
+      if (f.kind === "treasure") {
+        // treasure event drop: instant coin reward
+        this.treasureEarned++;
+        this.addScore(150);
+        this.hitStop(0.12);
+        this.shake(8);
+        this.floaters.add(nx, ny - 0.6, "🪙 +۱۵۰", "#fde047", 16);
+        this.fx.burst(nx, ny, "#fde047", { count: 18, speed: 3, life: 0.7, glow: true });
+        this.audio.play("reward");
+        return;
+      }
       if (f.kind === "core") {
         if (this.boss) this.boss.onCoreEaten();
         this.floaters.add(nx, ny - 0.6, "🔋", "#c4b5fd", 16);
@@ -249,12 +275,18 @@ export class Game {
         this.apples++;
         const frenzy = !!this.powerups.frenzy;
         const gold = f.kind === "gold";
-        if (gold) this.goldenApples++;
+        if (gold) { this.goldenApples++; this.hitStop(0.1); this.shake(6); }
         const base = gold ? 30 : 10;
         const pts = Math.round(base * (1 + this.combo * 0.1) * (frenzy ? 2 : 1));
         this.addScore(pts);
         this.fx.burst(nx, ny, gold ? "#fde047" : "#f87171", { count: 10, speed: 2.5, life: 0.5, glow: true });
         this.audio.play(gold ? "gold" : "eat", this.combo);
+        // combo milestone fanfare
+        if (this.combo > 1 && this.combo % 5 === 0) {
+          this.audio.play("combo", this.combo);
+          this.floaters.add(nx, ny - 0.7, `COMBO ×${this.combo}`, "#fde047", 15);
+          this.fx.ring(nx, ny, "#fde047", 9, 0.4);
+        }
         if (!frenzy && Math.random() < 0.14 && !this.boss) this.spawnPowerup(nx, ny);
       }
       return;
@@ -481,7 +513,7 @@ export class Game {
       case "length": return this.segments.length >= o.target;
       case "survive": return this.secElapsed >= o.seconds;
       case "time": return this.portalReached; // reach portal before timer ends
-      case "nohit": return this.hits === 0 && !this.powerups.shield;
+      case "nohit": return this.hits === 0 && this.stepCount >= 12 && !this.powerups.shield;
       case "keys": return this.keysCollected >= o.target;
       case "boss": return !this.boss || this.boss.hp <= 0;
       default: return true;
@@ -516,6 +548,13 @@ export class Game {
   }
 
   shake(n) { this.shakeAmt = Math.max(this.shakeAmt, n); }
+
+  // brief slow-motion hit-stop for juicy feedback
+  hitStop(t) {
+    if (this.slowmo > t) return;
+    this.slowmo = t;
+    this.timeScale = 0.3;
+  }
 
   get head() { return this.segments[0]; }
   get length() { return this.segments.length; }
@@ -583,6 +622,34 @@ export class Game {
     // survival objective check on timer
     this.checkObjectives();
 
+    // ---------- dynamic events ----------
+    if (this.eventSurvival > 0) {
+      this.eventSurvival -= dt;
+      if (this.eventSurvival <= 0) {
+        this.eventSurvival = 0;
+        this.eventName = null;
+        this.addScore(500);
+        this.fx.confetti(this.head.x, this.head.y, null, 40);
+        this.audio.play("reward");
+        this.floaters.add(this.head.x, this.head.y - 0.8, "⏱ زنده ماندی! +۵۰۰", "#fde047", 16);
+      }
+    }
+    if (this.eventSpeed > 0) {
+      this.eventSpeed -= dt;
+      if (this.eventSpeed <= 0) {
+        this.eventSpeed = 0;
+        this.floaters.add(this.head.x, this.head.y - 0.8, "⏱ پایان تندروی", "#94a3b8", 12);
+      }
+    }
+    // schedule the next random event (no events on boss levels / timed objectives / replays)
+    if (!this.boss && !this.level.timeLimit && this.mode !== "replay") {
+      this.eventCd -= dt;
+      if (this.eventCd <= 0) {
+        this.eventCd = 22 + Math.random() * 16; // 22-38s cadence
+        this.triggerEvent();
+      }
+    }
+
     // music intensity
     const intensity = Math.min(3, Math.floor(this.combo / 5) + (this.boss ? 2 : 0));
     this.audio.setIntensity(intensity);
@@ -633,6 +700,48 @@ export class Game {
         }
       }
     }
+  }
+
+  // ---------- random run events ----------
+  triggerEvent() {
+    const pool = ["golden", "speed", "survival", "treasure", "frenzy"];
+    const ev = pool[Math.floor(Math.random() * pool.length)];
+    const l = this.level;
+    const freeCell = () => {
+      for (let i = 0; i < 60; i++) {
+        const x = 1 + Math.floor(Math.random() * (l.cols - 2));
+        const y = 1 + Math.floor(Math.random() * (l.rows - 2));
+        if (!this.blocked(x, y) && !this.hazardAt(x, y) && !this.segments.some((s) => s.x === x && s.y === y)) return { x, y };
+      }
+      return null;
+    };
+    const faMap = { golden: "سیبهای طلایی!", speed: "تندروی!", survival: "۳۰ ثانیه زنده بمان!", treasure: "گنج!", frenzy: "رنگینکمان!" };
+    const iconMap = { golden: "✨", speed: "⚡", survival: "⏱", treasure: "🪙", frenzy: "🌈" };
+    switch (ev) {
+      case "golden": {
+        for (let i = 0; i < 4; i++) {
+          const c = freeCell();
+          if (c) this.ents.foods.push({ x: c.x, y: c.y, kind: "gold" });
+        }
+        break;
+      }
+      case "speed": this.eventSpeed = 8; break;
+      case "survival": this.eventSurvival = this.eventSurvivalMax = 30; break;
+      case "treasure": {
+        const c = freeCell();
+        if (c) this.ents.foods.push({ x: c.x, y: c.y, kind: "treasure" });
+        break;
+      }
+      case "frenzy":
+        this.frenzyCount++;
+        this.powerups.frenzy = { t: 6 };
+        this.fx.confetti(this.head.x, this.head.y, null, 40);
+        break;
+    }
+    this.eventName = ev;
+    this.audio.play("event");
+    this.floaters.add(this.head.x, this.head.y - 0.8, `${iconMap[ev]} ${faMap[ev]}`, "#fde047", 15);
+    this.onEvent("event", { id: ev, fa: faMap[ev], icon: iconMap[ev] });
   }
 
   // weather overlay parameters for renderer

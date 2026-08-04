@@ -48,31 +48,74 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// swipe (touch)
-let ts = null;
-canvas.addEventListener("touchstart", (e) => { ts = e.touches[0]; }, { passive: true });
-canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+// ---------- touch controls ----------
+// Two modes: continuous finger steering (default) and classic swipe.
+let touchActive = false;
+let lastSwipe = null;
+let lastSteer = { x: 0, y: 0 };
+let steerLockUntil = 0;
+
+function headScreenPos() {
+  const h = game.head;
+  if (!h || !renderer) return null;
+  return {
+    x: renderer.boardX + h.x * renderer.cell + renderer.cell / 2 - renderer.camX,
+    y: renderer.boardY + h.y * renderer.cell + renderer.cell / 2 - renderer.camY,
+  };
+}
+
+function steerToward(clientX, clientY) {
+  const hp = headScreenPos();
+  if (!hp) return;
+  const dx = clientX - hp.x;
+  const dy = clientY - hp.y;
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // dead zone at head
+  const ax = Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) : 0;
+  const ay = Math.abs(dy) >= Math.abs(dx) ? Math.sign(dy) : 0;
+  if (ax === lastSteer.x && ay === lastSteer.y) return;
+  if (performance.now() < steerLockUntil) return;
+  lastSteer = { x: ax, y: ay };
+  steerLockUntil = performance.now() + 110; // brief anti-jitter window
+  game.inputDir(ax, ay);
+}
+
+canvas.addEventListener("touchstart", (e) => {
+  touchActive = true;
+  lastSwipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now() };
+  lastSteer = { x: 0, y: 0 };
+}, { passive: true });
+
+canvas.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+  if (!touchActive) return;
+  if (p.settings.dragSteer) steerToward(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+
 canvas.addEventListener("touchend", (e) => {
-  if (!ts) return;
-  const dx = e.changedTouches[0].clientX - ts.clientX;
-  const dy = e.changedTouches[0].clientY - ts.clientY;
-  ts = null;
-  if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
-  if (Math.abs(dx) > Math.abs(dy)) game.inputDir(Math.sign(dx), 0);
-  else game.inputDir(0, Math.sign(dy));
+  if (!touchActive) return;
+  touchActive = false;
+  const t = e.changedTouches[0];
+  if (!p.settings.dragSteer && lastSwipe) {
+    const dx = t.clientX - lastSwipe.x;
+    const dy = t.clientY - lastSwipe.y;
+    if (Math.abs(dx) >= 24 || Math.abs(dy) >= 24) {
+      if (Math.abs(dx) > Math.abs(dy)) game.inputDir(Math.sign(dx), 0);
+      else game.inputDir(0, Math.sign(dy));
+    }
+  }
+  lastSwipe = null;
 });
 
-// swipe (mouse, for desktop)
-let ms = null;
-canvas.addEventListener("mousedown", (e) => { ms = { x: e.clientX, y: e.clientY }; });
-canvas.addEventListener("mouseup", (e) => {
-  if (!ms) return;
-  const dx = e.clientX - ms.x, dy = e.clientY - ms.y;
-  ms = null;
-  if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
-  if (Math.abs(dx) > Math.abs(dy)) game.inputDir(Math.sign(dx), 0);
-  else game.inputDir(0, Math.sign(dy));
+// mouse drag steering (desktop)
+let mouseDown = false;
+canvas.addEventListener("mousedown", (e) => { mouseDown = true; });
+canvas.addEventListener("mousemove", (e) => {
+  if (!mouseDown || !p.settings.dragSteer) return;
+  steerToward(e.clientX, e.clientY);
 });
+canvas.addEventListener("mouseup", () => { mouseDown = false; });
+
+
 
 // ---------- main loop ----------
 let last = performance.now();
@@ -81,6 +124,7 @@ function loop(now) {
   last = now;
   game.update(dt);
   if (game.level) renderer.draw();
+  ui.previewSkinLoop();
   ui.updateHUD(false);
   requestAnimationFrame(loop);
 }
@@ -96,4 +140,16 @@ const initAudio = () => {
 window.addEventListener("pointerdown", initAudio);
 window.addEventListener("keydown", initAudio);
 
-ui.show("main");
+// premium loader fade-out, then show the menu
+const loaderEl = document.getElementById("loader");
+const boot = () => {
+  if (loaderEl) {
+    loaderEl.classList.add("done");
+    setTimeout(() => loaderEl.remove(), 700);
+  }
+  ui.show("main");
+};
+// ensure the loader shows at least briefly for a cinematic feel
+const t0 = performance.now();
+if (document.readyState === "complete" && performance.now() - t0 > 200) boot();
+else setTimeout(boot, 350);

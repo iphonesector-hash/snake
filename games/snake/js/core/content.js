@@ -291,23 +291,27 @@ export function genLevel(worldIdx, levelNum, seed, mode = "campaign") {
   return level;
 }
 
-// ---------- skins ----------
+// ---------- skins (premium collection) ----------
+// head: round | visor | crown | horns | fang | crystal | drone | blade | ember | royal
+// pattern: none | stripes | diamond | scales | hex | pulse
 export const SKINS = [
-  { id: "classic", fa: "کلاسیک", colors: ["#22c55e", "#16a34a"], price: 0, icon: "🐍", eyes: "normal" },
-  { id: "pixel", fa: "پیکسلی", colors: ["#4ade80", "#15803d"], price: 100, icon: "🟩", eyes: "square" },
-  { id: "neon", fa: "نئون", colors: ["#22d3ee", "#6366f1"], price: 250, icon: "💠", eyes: "glow", trail: "neon" },
-  { id: "rose", fa: "رز", colors: ["#fb7185", "#be123c"], price: 300, icon: "🌸", eyes: "normal" },
-  { id: "gold", fa: "طلایی", colors: ["#fde047", "#d97706"], price: 800, currency: "gems", icon: "👑", eyes: "star", trail: "gold", legendary: true },
-  { id: "ice", fa: "یخی", colors: ["#a5f3fc", "#38bdf8"], price: 350, icon: "❄️", eyes: "glow", trail: "ice" },
-  { id: "fire", fa: "آتشین", colors: ["#fb923c", "#ef4444"], price: 400, icon: "🔥", eyes: "fire", trail: "fire", legendary: true },
-  { id: "shadow", fa: "سایه", colors: ["#c4b5fd", "#6d28d9"], price: 600, currency: "gems", icon: "🌑", eyes: "glow", trail: "shadow", legendary: true },
-  { id: "rainbow", fa: "رنگینکمان", colors: ["#f472b6", "#22d3ee"], price: 0, icon: "🌈", eyes: "star", trail: "rainbow", unlock: "achievement:rainbow_rider", legendary: true },
-  { id: "pumpkin", fa: "کدو تنبل", colors: ["#fb923c", "#7c2d12"], price: 0, icon: "🎃", eyes: "square", unlock: "event:halloween", seasonal: true },
-  { id: "snowflake", fa: "دانه برف", colors: ["#e0f2fe", "#0ea5e9"], price: 0, icon: "☃️", eyes: "normal", unlock: "event:christmas", seasonal: true },
-  { id: "candy", fa: "آبنبات", colors: ["#f9a8d4", "#a78bfa"], price: 500, icon: "🍬", eyes: "normal" },
-  { id: "cyber", fa: "سایبر", colors: ["#67e8f9", "#e879f9"], price: 550, icon: "🤖", eyes: "glow", trail: "neon" },
-  { id: "cosmic", fa: "کیهانی", colors: ["#c084fc", "#1e1b4b"], price: 900, currency: "gems", icon: "🌌", eyes: "star", trail: "shadow", unlock: "prestige:1", legendary: true },
-  { id: "prism", fa: "منشور", colors: ["#fef08a", "#f0abfc"], price: 0, icon: "💎", eyes: "star", trail: "gold", unlock: "achievement:completionist", legendary: true },
+  { id: "classic", fa: "کلاسیک", colors: ["#22c55e", "#16a34a"], price: 0, icon: "🐍", eyes: "normal", head: "round", pattern: "none", glow: 6 },
+  { id: "pixel", fa: "پیکسلی", colors: ["#4ade80", "#15803d"], price: 100, icon: "🟩", eyes: "square", head: "visor", pattern: "none", glow: 4 },
+  { id: "neon", fa: "نئون", colors: ["#22d3ee", "#6366f1"], price: 250, icon: "💠", eyes: "glow", head: "visor", pattern: "hex", glow: 16, trail: "neon" },
+  { id: "rose", fa: "رز", colors: ["#fb7185", "#be123c"], price: 300, icon: "🌸", eyes: "normal", head: "round", pattern: "scales", glow: 7 },
+  { id: "gold", fa: "طلایی افسانهای", colors: ["#fde047", "#d97706"], price: 800, currency: "gems", icon: "👑", eyes: "star", head: "crown", pattern: "diamond", glow: 22, trail: "gold", legendary: true },
+  { id: "ice", fa: "کریستال یخی", colors: ["#a5f3fc", "#38bdf8"], price: 350, icon: "❄️", eyes: "glow", head: "crystal", pattern: "scales", glow: 18, trail: "ice" },
+  { id: "fire", fa: "مار آتشین", colors: ["#fb923c", "#ef4444"], price: 400, icon: "🔥", eyes: "fire", head: "horns", pattern: "pulse", glow: 20, trail: "fire", legendary: true },
+  { id: "shadow", fa: "شبح سایه", colors: ["#c4b5fd", "#6d28d9"], price: 600, currency: "gems", icon: "🌑", eyes: "glow", head: "fang", pattern: "none", glow: 20, trail: "shadow", legendary: true },
+  { id: "rainbow", fa: "رنگینکمان", colors: ["#f472b6", "#22d3ee"], price: 0, icon: "🌈", eyes: "star", head: "round", pattern: "rainbow", glow: 18, trail: "rainbow", unlock: "achievement:rainbow_rider", legendary: true },
+  { id: "pumpkin", fa: "کدو تنبل", colors: ["#fb923c", "#7c2d12"], price: 0, icon: "🎃", eyes: "square", head: "round", pattern: "none", glow: 10, unlock: "event:halloween", seasonal: true },
+  { id: "snowflake", fa: "دانه برف", colors: ["#e0f2fe", "#0ea5e9"], price: 0, icon: "☃️", eyes: "normal", head: "crystal", pattern: "scales", glow: 12, unlock: "event:christmas", seasonal: true },
+  { id: "candy", fa: "آبنبات", colors: ["#f9a8d4", "#a78bfa"], price: 500, icon: "🍬", eyes: "normal", head: "round", pattern: "stripes", glow: 8 },
+  { id: "cyber", fa: "سایبر", colors: ["#67e8f9", "#e879f9"], price: 550, icon: "🤖", eyes: "glow", head: "visor", pattern: "hex", glow: 18, trail: "neon" },
+  { id: "space", fa: "فضایی", colors: ["#c084fc", "#1e1b4b"], price: 650, icon: "🚀", eyes: "star", head: "drone", pattern: "diamond", glow: 18, trail: "shadow" },
+  { id: "royal", fa: "شاهانه", colors: ["#f0abfc", "#7c3aed"], price: 1200, currency: "gems", icon: "💜", eyes: "star", head: "royal", pattern: "diamond", glow: 24, trail: "gold", legendary: true },
+  { id: "cosmic", fa: "کیهانی", colors: ["#22d3ee", "#1e1b4b"], price: 900, currency: "gems", icon: "🌌", eyes: "star", head: "drone", pattern: "hex", glow: 22, trail: "shadow", unlock: "prestige:1", legendary: true },
+  { id: "prism", fa: "منشور", colors: ["#fef08a", "#f0abfc"], price: 0, icon: "💎", eyes: "star", head: "crystal", pattern: "rainbow", glow: 22, trail: "gold", unlock: "achievement:completionist", legendary: true },
 ];
 
 export const skinById = (id) => SKINS.find((s) => s.id === id);

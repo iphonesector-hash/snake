@@ -6,7 +6,8 @@ import {
 import {
   profile, grant, recordLevel, recordEndless, recordDaily, checkAchievements,
   dailyLogin, todayKey, xpForLevel, addQuestProgress, spend, unlockSkin,
-  equipSkin, wheelSpin, chestOpen, claimQuest, prestige, saveProfile,
+  equipSkin, wheelSpin, wheelRemaining, formatCountdown, consumeBooster,
+  chestOpen, claimQuest, prestige, saveProfile,
 } from "../core/state.js";
 
 const OB_FA = {
@@ -33,7 +34,12 @@ export class UI {
     this.replayMode = false;
     this.hudTimer = 0;
     this.bossBar = null;
+    this.wheelTimer = null;
     game.onEvent = (t, d) => this.handleEvent(t, d);
+  }
+
+  clearTimers() {
+    if (this.wheelTimer) { clearInterval(this.wheelTimer); this.wheelTimer = null; }
   }
 
   el(id) { return document.getElementById(id); }
@@ -51,6 +57,7 @@ export class UI {
 
   // ---------- screens ----------
   show(name) {
+    this.clearTimers();
     this.screen = name;
     if (name === "game") {
       this.root.classList.add("hidden");
@@ -215,6 +222,11 @@ export class UI {
     else if (act === "resume") this.game.togglePause();
     else if (act === "quit") { this.game.audio.stopMusic(); this.game.running = false; this.show("main"); }
     else if (act === "menu") this.show("main");
+    else if (act.startsWith("preview:")) {
+      this.previewSkin = act.split(":")[1];
+      this.renderSkinPreview();
+      AudioSys.play("click");
+    }
     else if (act.startsWith("buy-skin:")) this.buySkin(act.split(":")[1]);
     else if (act.startsWith("equip:")) this.equip(act.split(":")[1]);
     else if (act.startsWith("spin")) this.spinWheel();
@@ -293,6 +305,12 @@ export class UI {
     this.replayMode = false;
     this.game.skinId = this.p().skin;
     this.game.startLevel(level, mode);
+    // apply saved wheel booster at run start
+    const booster = consumeBooster();
+    if (booster) {
+      this.game.applyPowerup(booster);
+      this.toast(`⏫ بوستر «${POWERUPS[booster].fa}» فعال شد!`, POWERUPS[booster].icon);
+    }
   }
 
   playReplay(i) {
@@ -442,6 +460,7 @@ export class UI {
       case "complete": this.onWin(); break;
       case "gameOver": this.onLose(data); break;
       case "powerup": this.toast(`${POWERUPS[data.type].icon} ${POWERUPS[data.type].fa} فعال شد`, POWERUPS[data.type].icon); break;
+      case "event": this.toast(`${data.icon} رویداد: ${data.fa}`, data.icon); break;
       case "strikeReady": this.toast("⚡ ضربه آماده است! به سر باس بزن", "⚡"); break;
       case "coreSpawned": break;
       case "bossPhase": this.toast(`💢 باس وارد فاز ${data.phase + 1} شد!`, "💢"); this.game.shake(10); break;
@@ -609,6 +628,12 @@ export class UI {
   // ---------- shop ----------
   shopBody() {
     const p = this.p();
+    const wLeft = wheelRemaining();
+    const wheelBtn = wLeft > 0
+      ? `<button class="menu-btn accent" data-act="spin" disabled><span id="wheel-cd">⏳ ${formatCountdown(wLeft)}</span></button>`
+      : `<button class="menu-btn accent" data-act="spin">🎡 بچرخان (۵۰ 🪙)</button>`;
+    const frags = p.wheel?.fragments || 0;
+    const boosters = p.wheel?.boosters?.length || 0;
     const skinRows = SKINS.map((s) => {
       const owned = p.owned.includes(s.id);
       const equip = p.skin === s.id;
@@ -626,8 +651,9 @@ export class UI {
     return `
       <div class="shop-section"><h3>🎨 پوستههای مار</h3><div class="skin-grid">${skinRows}</div></div>
       <div class="shop-section">
-        <h3>🎡 چرخ بخت <span class="cost">(۵۰ 🪙)</span></h3>
-        <button class="menu-btn accent" data-act="spin">🎡 بچرخان</button>
+        <h3>🎡 چرخ بخت روزانه <span class="cost">(هر ۲۴ ساعت — یک بار)</span></h3>
+        ${wheelBtn}
+        <div class="hint-line">🧩 تکه پوست: ${frags}/۸ &nbsp;•&nbsp; ⏫ بوستر: ${boosters}</div>
         <h3>📦 صندوق سکه <span class="cost">(هر ۴ ساعت)</span></h3>
         <button class="menu-btn" data-act="chest">📦 باز کن (+۱۲۰ 🪙)</button>
         <h3>🌟 پرستیژ <span class="cost">(پیشرفتهای فعلی)</span></h3>
@@ -643,7 +669,19 @@ export class UI {
     return true;
   }
 
-  afterShop() {}
+  afterShop() {
+    // live countdown on the daily wheel button
+    const cd = this.el("wheel-cd");
+    if (cd) {
+      const tick = () => {
+        const left = wheelRemaining();
+        if (left <= 0) { this.clearTimers(); this.show("shop"); return; }
+        cd.textContent = `⏳ ${formatCountdown(left)}`;
+      };
+      tick();
+      this.wheelTimer = setInterval(tick, 1000);
+    }
+  }
 
   buySkin(id) {
     const s = SKINS.find((x) => x.id === id);
@@ -656,20 +694,42 @@ export class UI {
       equipSkin(id);
       AudioSys.play("coin");
       this.toast(`پوسته «${s.fa}» خریداری شد!`, s.icon);
-      this.show("shop");
+      this.show(this.screen === "collection" ? "collection" : "shop");
     } else this.toast("سکه یا جواهر کافی نیست!", "💸");
   }
 
   equip(id) {
-    if (equipSkin(id)) { AudioSys.play("click"); this.toast("پوسته مجهز شد", "🎨"); this.show("shop"); }
+    if (equipSkin(id)) {
+      AudioSys.play("skin");
+      this.toast("پوسته مجهز شد", "🎨");
+      this.show(this.screen === "collection" ? "collection" : "shop");
+    }
   }
 
   spinWheel() {
     const res = wheelSpin();
     if (!res) { this.toast("۵۰ سکه کافی نیست!", "💸"); return; }
+    if (res.cooldown) {
+      this.toast(`چرخ بعدی در ${formatCountdown(res.cooldown)}`, "⏳");
+      return;
+    }
+    this.wheelReveal(res);
+  }
+
+  wheelReveal(res) {
+    const cin = this.cinRoot;
+    cin.innerHTML = `
+      <div class="cin wheel-cin">
+        <div class="wheel-spinner">🎡</div>
+        <div class="cin-kicker">چرخ بخت روزانه</div>
+        <div class="wheel-result">${res.icon} ${res.fa}${res.n ? ` +${res.n}` : ""}</div>
+        ${res.skinUnlocked ? `<div class="wheel-skin">🎉 پوسته «${res.skinUnlocked}» باز شد!</div>` : res.booster ? `<div class="wheel-booster">بوستر «${res.booster}» ذخیره شد — در مرحلهی بعدی خودکار فعال میشود</div>` : ""}
+      </div>`;
     AudioSys.play("win");
-    this.toast(res.kind === "gems" ? `💎 +${res.n} جواهر!` : `🪙 +${res.n} سکه!`, "🎡");
-    this.show("shop");
+    setTimeout(() => {
+      cin.innerHTML = "";
+      this.show("shop");
+    }, 2400);
   }
 
   openChest() {
@@ -691,21 +751,47 @@ export class UI {
     this.show("main");
   }
 
-  // ---------- collection ----------
+  // ---------- snake selection (premium collection) ----------
   collectionBody() {
     const p = this.p();
+    this.previewSkin = p.skin;
     const rows = SKINS.map((s) => {
       const owned = p.owned.includes(s.id);
       const eq = p.skin === s.id;
-      return `<div class="shop-skin ${owned ? "owned" : "locked"} ${eq ? "eq" : ""}" style="--sc1:${s.colors[0]};--sc2:${s.colors[1]}">
-        <div class="skin-icon">${s.icon}</div><div class="skin-name">${s.fa}</div>
-        ${eq ? `<div class="skin-state">✔ مجهز</div>` : owned ? `<button class="mini-btn" data-act="equip:${s.id}">مجهز کن</button>` : `<div class="skin-state">🔒 قفل</div>`}
+      const locked = !owned && s.unlock && !this.canUnlock(s);
+      const price = s.price ? `${s.currency === "gems" ? "💎" : "🪙"} ${fmt(s.price)}` : "رایگان";
+      return `<div class="shop-skin ${owned ? "owned" : "locked"} ${eq ? "eq" : ""} ${s.legendary ? "legendary" : ""}" data-act="${owned || !locked ? "preview:" + s.id : ""}" style="--sc1:${s.colors[0]};--sc2:${s.colors[1]}">
+        <div class="skin-icon">${s.icon}</div><div class="skin-name">${s.fa} ${s.legendary ? "🌟" : ""} ${s.seasonal ? "🎉" : ""}</div>
+        ${eq ? `<div class="skin-state">✔ مجهز</div>`
+          : owned ? `<button class="mini-btn" data-act="equip:${s.id}">مجهز کن</button>`
+          : locked ? `<div class="skin-state">${s.unlock.startsWith("achievement") ? "🔓 با دستاورد" : s.unlock.startsWith("event") ? "🎉 رویداد فصلی" : "🌟 پرستیژ"}</div>`
+          : `<button class="mini-btn buy" data-act="buy-skin:${s.id}">${price}</button>`}
       </div>`;
     }).join("");
-    return `<div class="skin-grid">${rows}</div><div class="hint-line">پوستههای افسانهای 🌟 هیچ مزیت بازی ندارند — فقط ظاهر!</div>`;
+    return `
+      <div class="skin-preview"><canvas id="skin-preview-canvas" width="280" height="120"></canvas><div class="skin-preview-name" id="skin-preview-name"></div></div>
+      <div class="skin-grid">${rows}</div>
+      <div class="hint-line">پوستههای افسانهای 🌟 هیچ مزیت بازی ندارند — فقط ظاهر! روی هر پوسته بزن تا پیشنمایش ببینی.</div>`;
   }
 
-  afterCollection() {}
+  afterCollection() {
+    this.renderSkinPreview();
+  }
+
+  renderSkinPreview() {
+    const cv = this.el("skin-preview-canvas");
+    if (!cv || !this.previewSkin) return;
+    this.renderer.drawSkinPreview(cv, this.previewSkin, performance.now() / 1000);
+    const nm = this.el("skin-preview-name");
+    if (nm) {
+      const s = SKINS.find((x) => x.id === this.previewSkin);
+      nm.textContent = s ? `${s.icon} ${s.fa}${s.legendary ? " 🌟" : ""}` : "";
+    }
+  }
+
+  previewSkinLoop() {
+    if (this.screen === "collection") this.renderSkinPreview();
+  }
 
   // ---------- achievements ----------
   achievementsBody() {
@@ -750,6 +836,7 @@ export class UI {
       ${t("contrast", "🔆 کنتراست بالا", "رنگهای پررنگتر و واضحتر")}
       ${t("colorblind", "👁 حالت کوررنگی", "پالت جایگزین برای موانع")}
       ${t("leftHanded", "✋ چپدست", "جابهجایی دکمههای لمسی")}
+      ${t("dragSteer", "🖐 رانندگی با انگشت", "مار با حرکت انگشت روی صفحه هدایت میشود (روشن) یا با کشیدن سوایپ (خاموش)")}
       <label class="set-row"><span><b>🎚 سختی</b><small>سرعت بازی</small></span>
         <select data-set="difficulty">${[0.8, 1, 1.25].map((d, i) => `<option value="${d}" ${s.difficulty === d ? "selected" : ""}>${["آسان", "عادی", "سخت"][i]}</option>`).join("")}</select></label>
       <label class="set-row"><span><b>⚡ نرخ فریم</b><small>۶۰ یا ۱۲۰</small></span>
@@ -769,6 +856,7 @@ export class UI {
   applyToggle(k) {
     const p = this.p();
     p.settings[k] = !p.settings[k];
+    if (k === "leftHanded") this.bindDpad();
     saveProfile();
     if (k === "sfx" || k === "music") AudioSys.setEnabled(p.settings.sfx, p.settings.music);
     this.renderer.setSettings(p.settings);
