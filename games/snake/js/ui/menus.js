@@ -69,9 +69,11 @@ export class UI {
     const p = this.p();
     const ev = eventInfo();
     const evBanner = ev ? `<div class="event-banner" data-act="daily">${ev.icon} ${ev.fa}</div>` : "";
+    const backBtn = opts.back ? `<button class="mini-btn" data-act="menu">← منو</button>` : "";
     return `
       <div class="screen-wrap">
         <div class="shell-top">
+          ${backBtn}
           <div class="shell-title">${opts.title || "LoveHub Snake"}</div>
           <div class="currencies">
             <span class="cur">🪙 <b id="cur-coins">${fmt(p.coins)}</b></span>
@@ -81,22 +83,22 @@ export class UI {
           </div>
         </div>
         ${evBanner}
-        <div class="shell-body">${html}</div>
+        <div class="shell-body">${inner}</div>
       </div>`;
   }
 
   screenHtml(name) {
     switch (name) {
       case "main": return this.shell(this.mainBody());
-      case "worlds": return this.shell(this.worldsBody(), { title: "🌍 دنیاها" });
-      case "levels": return this.shell(this.levelsBody(), { title: `🗺 ${WORLDS[this.currentWorld].fa}` });
-      case "shop": return this.shell(this.shopBody(), { title: "🛍 فروشگاه" });
-      case "collection": return this.shell(this.collectionBody(), { title: "🎨 مجموعه" });
-      case "achievements": return this.shell(this.achievementsBody(), { title: "🏅 دستاوردها" });
-      case "leaderboard": return this.shell(this.leaderboardBody(), { title: "🏆 جدول امتیازها" });
-      case "settings": return this.shell(this.settingsBody(), { title: "⚙️ تنظیمات" });
-      case "daily": return this.shell(this.dailyBody(), { title: "🌞 چالش روزانه" });
-      case "replay": return this.shell(this.replayBody(), { title: "🎬 بازپخش" });
+      case "worlds": return this.shell(this.worldsBody(), { title: "🌍 دنیاها", back: true });
+      case "levels": return this.shell(this.levelsBody(), { title: `🗺 ${WORLDS[this.currentWorld].fa}`, back: true });
+      case "shop": return this.shell(this.shopBody(), { title: "🛍 فروشگاه", back: true });
+      case "collection": return this.shell(this.collectionBody(), { title: "🎨 مجموعه", back: true });
+      case "achievements": return this.shell(this.achievementsBody(), { title: "🏅 دستاوردها", back: true });
+      case "leaderboard": return this.shell(this.leaderboardBody(), { title: "🏆 جدول امتیازها", back: true });
+      case "settings": return this.shell(this.settingsBody(), { title: "⚙️ تنظیمات", back: true });
+      case "daily": return this.shell(this.dailyBody(), { title: "🌞 چالش روزانه", back: true });
+      case "replay": return this.shell(this.replayBody(), { title: "🎬 بازپخش", back: true });
       default: return this.shell(this.mainBody());
     }
   }
@@ -225,7 +227,6 @@ export class UI {
     else if (act.startsWith("set:")) this.applySetting(act);
     else if (act.startsWith("toggle:")) this.applyToggle(act.split(":")[1]);
     else if (act.startsWith("replay-run:")) this.playReplay(+act.split(":")[2]);
-    else if (act === "shop-skins" || act === "shop-wheel" || act === "shop-chest" || act === "shop-prestige") this.shopTab(act.split("-")[1]);
   }
 
   // ---------- game flow ----------
